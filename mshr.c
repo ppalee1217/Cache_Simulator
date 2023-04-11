@@ -14,8 +14,10 @@
 mshr_queue_t* init_mshr_queue(int entires, int inst_num) {
   //  Use malloc to dynamically allocate a mshr_queue_t
 	mshr_queue_t * queue = (mshr_queue_t*) malloc(sizeof(mshr_t)*entires);
-  queue->entries = entires;
-  mshr_t * mshr = init_mshr(inst_num);
+  for(int i =0;i<entires;i++){
+    queue[i].entries = entires;
+    queue[i].mshr = init_mshr(inst_num);
+  }
   return queue;
 }
 /**
@@ -34,72 +36,135 @@ mshr_t *init_mshr(int inst_num){
   return mshr;
 }
 
-bool mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination){
+/**
+ * Log the new request info issued to the DRAM
+ * 
+ * @param type is the operation type of the instruction - 0 for load, 1 for store, 2 for instruction read (not used).
+ * @return -1 if the MAF is full, 0 if the MSHR is full, 1 if the request is not in MSHR, 2 if the request is in MSHR and MAF is not full.
+ */
+int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination){
   int empty_entry = -1;
   for(int i =0 ;i<queue->entries;i++){
-    // Always tend to find an empty entry has lower index
-    if(!queue->mshr[i].valid && empty_entry != -1)
-      empty_entry = i;
-    if(queue->mshr[i].valid && queue->mshr[i].block_addr == block_addr){
+    if(queue[i].mshr->valid && queue[i].mshr->block_addr == block_addr){
       // This entry is already exist
-      for(int j = 0; j<queue->mshr[i].maf_size;j++){
-        if(!queue->mshr[i].maf[j].valid){
+      printf("MSHR %d is already exist\n", i);
+      for(int j = 0; j<queue[i].mshr->maf_size;j++){
+        if(!queue[i].mshr->maf[j].valid){
           // MAF is not full
-          queue->mshr[i].maf[j].valid = true;
-          // queue->mshr[i].maf[j].type = type;
-          // queue->mshr[i].maf[j].block_offsset = block_offset;
-          // queue->mshr[i].maf[j].destination = destination;
-          return true;
+          printf("MAF %d is not full, new MAF entry is added\n", j);
+          queue[i].mshr->maf[j].valid = true;
+          queue[i].mshr->maf[j].type = type;
+          queue[i].mshr->maf_used_num++;
+          // queue[i].mshr->maf[j].block_offsset = block_offset;
+          // queue[i].mshr->maf[j].destination = destination;
+          return 2;
         }
       }
-      // If MAF is full, return false (to stall the pipeline)
-      return false;
+      // If MAF is full, return -1 (to stall the pipeline)
+      printf("MAF is full, stall the pipeline\n");
+      return -1;
     }
   }
-  // Check if there is an empty entry left
+  for(int i=0;i<queue->entries;i++){
+    // Always tend to find an empty entry has lower index
+    if(!queue[i].mshr->valid){
+      empty_entry = i;
+      break;
+    }
+  }
+  // printf("empty_entry = %d\n", empty_entry);
+  // Check if there is any empty entry left
   if(empty_entry != -1){
-    queue->mshr[empty_entry].valid = true;
-    queue->mshr[empty_entry].issued = false;
-    queue->mshr[empty_entry].block_addr = block_addr;
-    queue->mshr[empty_entry].maf[0].valid = true;
-    // queue->mshr[empty_entry].maf[0].type = type;
-    // queue->mshr[empty_entry].maf[0].block_offsset = block_offset;
-    // queue->mshr[empty_entry].maf[0].destination = destination;
-    return true;
+    printf("MSHR %d is empty, new MSHR entry is added\n", empty_entry);
+    printf("Also, MAF %d is not full, new MAF entry is added\n", 0);
+    queue[empty_entry].mshr->valid = true;
+    queue[empty_entry].mshr->issued = false;
+    queue[empty_entry].mshr->block_addr = block_addr;
+    printf("Block address of queue %d is %llx\n", empty_entry, queue[empty_entry].mshr->block_addr);
+    queue[empty_entry].mshr->maf[0].valid = true;
+    queue[empty_entry].mshr->maf[0].type = type;
+    queue[empty_entry].mshr->maf_used_num++;
+    // queue[empty_entry].mshr->maf[0].block_offsset = block_offset;
+    // queue[empty_entry].mshr->maf[0].destination = destination;
+    return 1;
   }
   // If there is no empty entry left, return false (to stall the pipeline)
-  return false;
+  return 0;
 }
 
 int mshr_queue_check_isssue(mshr_queue_t* queue){
   for(int i =0 ;i<queue->entries;i++){
-    if(queue->mshr[i].valid && !queue->mshr[i].issued){
-      queue->mshr[i].issued = true;
+    if(queue[i].mshr->valid && !queue[i].mshr->issued){
+      queue[i].mshr->issued = true;
+      printf("MSHR %d issued.\n", i);
       return i;
     }
   }
   return -1;
 }
 
-void mshr_queue_clear_inst(mshr_queue_t* queue, unsigned long long block_addr){
+void mshr_queue_check_data_returned(mshr_queue_t* queue){
   for(int i =0 ;i<queue->entries;i++){
-    if(queue->mshr[i].valid && queue->mshr[i].block_addr == block_addr){
-      for(int j = 0; j<queue->mshr[i].maf_size;j++){
-        if(queue->mshr[i].maf[j].valid){
-          queue->mshr[i].maf[j].valid = false;
-        }
+    if(queue[i].mshr->valid && queue[i].mshr->issued){
+      if(queue[i].mshr->counter == MISS_CYCLE){
+        printf("MSHR %d data returned.\n", i);
+        queue[i].mshr->counter = 0;
+        queue[i].mshr->data_returned = true;
       }
-      queue->mshr[i].valid = false;
-      queue->mshr[i].issued = false;
-      queue->mshr[i].block_addr = 0;
     }
   }
+}
+
+bool mshr_queue_check_specific_data_returned(mshr_queue_t* queue, unsigned long long block_addr){
+  for(int i =0 ;i<queue->entries;i++){
+    if(queue[i].mshr->valid && queue[i].mshr->block_addr == block_addr){
+      if(queue[i].mshr->data_returned)
+        return true;
+      else
+        return false;
+    }
+  }
+  return false;
+}
+
+void mshr_queue_counter_add(mshr_queue_t* queue){
+  for(int i =0 ;i<queue->entries;i++){
+    // printf("Queue %d valid= %d, issued =%d\n",i,queue[i].mshr->valid,queue[i].mshr->issued);
+    if(queue[i].mshr->valid && queue[i].mshr->issued){
+      queue[i].mshr->counter++;
+      // printf("MSHR %d counter: %d\n", i, queue[i].mshr->counter);
+    }
+  }
+}
+
+int mshr_queue_clear_inst(mshr_queue_t* queue, int entries){
+  //for(int i =0 ;i<queue->entries;i++){
+  if(queue[entries].mshr->valid && queue[entries].mshr->data_returned){
+    for(int j = 0; j<queue[entries].mshr->maf_size;j++){
+      if(queue[entries].mshr->maf[j].valid){
+        // keep looping to clear maf inst
+        queue[entries].mshr->maf[j].valid = false;
+        printf("Clearing MAF Queue %d\n",j);
+        queue[entries].mshr->maf_used_num--;
+        if(queue[entries].mshr->maf_used_num==0){
+          queue[entries].mshr->valid = false;
+          queue[entries].mshr->issued = false;
+          queue[entries].mshr->data_returned = false;
+        }
+        return queue[entries].mshr->maf[j].type;
+      }
+    }
+  }
+  return -1;
+  //}
 }
 
 void mshr_queue_cleanup(mshr_queue_t* queue) {
   //  TODO: Write any code if you need to do additional heap allocation
   //  cleanup
-  free(queue->mshr->maf);
-  free(queue->mshr);
+  for(int i = 0; i<queue->entries;i++){
+    free(queue[i].mshr->maf);
+    free(queue[i].mshr);
+  }
   free(queue);
 }

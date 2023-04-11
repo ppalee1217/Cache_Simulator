@@ -2,8 +2,6 @@
  * @author ECE 3058 TAs
  */
 
-// Compile with: gcc lrustack.h lrustack.c cachesim.h cachesim.c -o cachesim
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -11,7 +9,7 @@
 #include "cachesim.h"
 #include "mshr.h"
 
-// Statistics you will need to keep track. DO NOT CHANGE THESE.
+// Statistics to keep track.
 counter_t accesses = 0;     // Total number of cache accesses
 counter_t hits = 0;         // Total number of cache hits
 counter_t misses = 0;       // Total number of cache misses
@@ -36,8 +34,6 @@ int simple_log_2(int x) {
     return val; 
 }
 
-//  Here are some global variables you may find useful to get you started.
-//      Feel free to add/change anyting here.
 cache_set_t* cache;     // Data structure for the cache
 int block_size;         // Block size
 int cache_size;         // Cache size
@@ -94,17 +90,6 @@ void cachesim_init(int _block_size, int _cache_size, int _ways) {
         }
         // cache->blocks->data = (int*) malloc((block_size/32) * sizeof(int));
     }
-
-    ////////////////////////////////////////////////////////////////////
-    //  TODO: Write the rest of the code needed to initialize your cache
-    //  simulator. Some of the things you may want to do are:
-    //      - Calculate any values you need such as number of index bits.
-    //      - Allocate any data structures you need.   
-    ////////////////////////////////////////////////////////////////////
-
-    ////////////////////////////////////////////////////////////////////
-    //  End of your code   
-    ////////////////////////////////////////////////////////////////////
 }
 
 /**
@@ -116,19 +101,9 @@ void cachesim_init(int _block_size, int _cache_size, int _ways) {
  * @param access_type is the type of access - 0 (data read), 1 (data write) or 
  *      2 (instruction read). We have provided macros (MEMREAD, MEMWRITE, IFETCH)
  *      to reflect these values in cachesim.h so you can make your code more readable.
+ * @param destination is the PE index that requested the access.
  */
-void cachesim_access(addr_t physical_addr, int access_type) {
-    ////////////////////////////////////////////////////////////////////
-    //  TODO: Write the code needed to perform a cache access on your
-    //  cache simulator. Some things to remember:
-    //      - When it is a cache hit, you SHOULD NOT bring another cache 
-    //        block in.
-    //      - When it is a cache miss, you should bring a new cache block
-    //        in. If the set is full, evict the LRU block.
-    //      - Remember to update all the necessary statistics as necessary
-    //      - Remember to correctly update your valid and dirty bits.  
-    ////////////////////////////////////////////////////////////////////
-
+void cachesim_access(addr_t physical_addr, int access_type, unsigned int destination) {
     // addr_t is a 64-bit unsigned integer.
     // Encoding:
     // [1:0]                                     : Byte offset
@@ -162,6 +137,7 @@ void cachesim_access(addr_t physical_addr, int access_type) {
     // Issue to handle now: bitwise operation in C to get index & offset in address
     accesses++;
     cycles++;
+    printf("- Cycle: %lld\n", cycles);
     unsigned int offset = 0;
     unsigned int index = 0;
     int tag = 0;
@@ -174,15 +150,29 @@ void cachesim_access(addr_t physical_addr, int access_type) {
     offset = ((physical_addr >> 2) & offset);
     index = ((physical_addr >> (num_offset_bits+2)) & index);
     tag = (physical_addr >> (num_index_bits + num_offset_bits + 2));
-        // printf("address = %llx\n",physical_addr);
-        // printf("offset = %x\n",offset);
-        // printf("index = %x\n",index);
-        // printf("tag = %x\n",tag);
-        // printf("=====================\n");
+    // printf("address = %llx\n",physical_addr);
+    // printf("offset = %x\n",offset);
+    // printf("index = %x\n",index);
+    // printf("tag = %x\n",tag);
+    // printf("=====================\n");
         // for(int i=0;i<ways;i++){
         //     printf("Cache[%d] Block[%d] = %x, valid = %d, Priority = %d\n",index,i,cache[index].blocks[i].tag,cache[index].blocks[i].valid,cache[index].stack->priority[i]);
         // }
-    // Check if cache data hit or miss
+    // ! Issued the request in MSHR queue (1 only in 1 cycle)
+    // !!!!!!! wrong
+    mshr_queue_check_isssue(cache->mshr_queue);
+    // ! Add counter of every mshr queue entry that issued
+    mshr_queue_counter_add(cache->mshr_queue);
+    // ! Check if the requested data is returned
+    mshr_queue_check_data_returned(cache->mshr_queue);
+    // ! Log the new returned data to cache & clear 1 instruction
+    for(int i=0; i<cache->mshr_queue->entries;i++){
+        if(cache->mshr_queue[i].mshr->data_returned && cache->mshr_queue[i].mshr->valid){
+            printf("Clearing instruction of MSHR Queue %d\n",i);
+            cachesim_load_MSHR_data(cache->mshr_queue[i].mshr->block_addr, mshr_queue_clear_inst(cache->mshr_queue,i));
+        }
+    }
+    // Check if new data hit or miss
     bool hit;
     int hit_index = 0;
     for(int i=0;i<ways;i++){
@@ -190,11 +180,10 @@ void cachesim_access(addr_t physical_addr, int access_type) {
         if(cache[index].blocks[i].tag == tag && cache[index].blocks[i].valid){
             hit = true;
             hit_index = i;
-                //printf("Hit! tag: %x is inside cache%d block %d\n",tag,index,i);
+            printf("Hit! tag: %x is inside cache %d block %d\n",tag,index,i);
             break;
         }
     }
-    bool replace_block;
     if(hit){
         // hit
         hits++;
@@ -209,77 +198,140 @@ void cachesim_access(addr_t physical_addr, int access_type) {
         lru_stack_set_mru(cache[index].stack, hit_index);
     }
     else{
-        //printf("Miss! tag: %x is not inside cache%d\n",tag,index);
+        printf("Miss! tag: %x is not inside cache\n",tag);
         // miss
         misses++;
+        int maf_result = mshr_queue_get_entry(cache->mshr_queue, physical_addr, access_type, offset, destination);
         // Check the MSHR Queue
-        if(mshr_queue_get_entry(cache->mshr_queue)){
-
+        if(maf_result == 1){
+            //* printf("This request is not in MSHR Queue, and is logged now\n");
+            // request is successfully logged and MAF is not full
+            // => check if the request is issued to DRAM, and log MAF (is done by mshr_queue_get_entry)
+            // * log instruction to MAF if the data is returned or not
+        }
+        else if(maf_result == 2){
+            //* printf("This request is in MSHR Queue, and MAF is not full yet.\n");
+            // request is successfully logged and MAF is not full
+            // => check if the request is issued to DRAM, and log MAF (is done by mshr_queue_get_entry)
+            // * log instruction to MAF if the data is returned or not
+        }
+        else if(maf_result == -1){
+            //* printf("This request is in MSHR Queue, but MAF is full.\n");
+            // request is already in the queue, but MAF is full
+            // => check if the request is issued to DRAM, and wait for this request to be done(stall => while loop)
+            // * Wait for data to return, and clear 1 instruction so that this new instruction can be logged.
+            // * meantime, MSHR will continue handle the returned data unexecuted instruction
+            miss_cycles++;
+            bool data_back = false;
+            while(!mshr_queue_check_specific_data_returned(cache->mshr_queue, physical_addr) && !data_back){
+                printf("Waiting for specific data to return...\n");
+                cycles++;
+                miss_cycles++;
+                mshr_queue_check_isssue(cache->mshr_queue);
+                mshr_queue_counter_add(cache->mshr_queue);
+                mshr_queue_check_data_returned(cache->mshr_queue);
+                for(int i =0 ;i<cache->mshr_queue->entries;i++){
+                    if(cache->mshr_queue[i].mshr->valid && cache->mshr_queue[i].mshr->data_returned){
+                        printf("Clearing instruction of MSHR Queue %d\n",i);
+                        cachesim_load_MSHR_data(cache->mshr_queue[i].mshr->block_addr, mshr_queue_clear_inst(cache->mshr_queue,i));
+                        if(cache->mshr_queue[i].mshr->block_addr == physical_addr)
+                            data_back = true;
+                    }
+                }
+            }
+            // * log the info of unlogged MAF
+            mshr_queue_get_entry(cache->mshr_queue, physical_addr, access_type, offset, destination);
+            printf("- Cycle: %lld\n", cycles);
         }
         else{
-            
-        }
-        cycles+= MISS_CYCLE;
-        miss_cycles+= MISS_CYCLE;
-        for(int i=0;i<ways;i++){
-            replace_block = true;
-            if(!cache[index].blocks[i].valid){
-                // Cache is not full yet
-                replace_block = false;
-                // Update cache
-                cache[index].blocks[i].valid = true;
-                cache[index].blocks[i].tag = tag;
-                if(access_type == MEMWRITE)
-                    cache[index].blocks[i].dirty = true;
-                // Update LRU
-                lru_stack_set_mru(cache[index].stack, i);
-                break;
+            //* printf("This request is not in MSHR Queue.\n");
+            miss_cycles++;
+            // * MSHR queue is full, wait for any data to return, and then wait for the MAF queue to be cleared
+            while(mshr_queue_get_entry(cache->mshr_queue, physical_addr, access_type, offset, destination) != 1){
+                // printf("Waiting for any data to return & clear...\n");
+                cycles++;
+                miss_cycles++;
+                mshr_queue_check_isssue(cache->mshr_queue);
+                mshr_queue_counter_add(cache->mshr_queue);
+                mshr_queue_check_data_returned(cache->mshr_queue);
+                for(int i =0 ;i<cache->mshr_queue->entries;i++){
+                    if(cache->mshr_queue[i].mshr->valid && cache->mshr_queue[i].mshr->data_returned){
+                        printf("Clearing instruction of MSHR Queue %d\n",i);
+                        cachesim_load_MSHR_data(cache->mshr_queue[i].mshr->block_addr, mshr_queue_clear_inst(cache->mshr_queue,i));
+                    }
+                }
+                printf("- Cycle: %lld\n", cycles);
             }
+            // ! log the info of returned data to cache
+            // request is not in the queue
         }
-        if(replace_block){
-            // Cache is full
-            int lru_index = lru_stack_get_lru(cache[index].stack);
-            // Check if replacing block is dirty
-                //printf("Full! block %d is replacing\n",lru_index);
-            if(cache[index].blocks[lru_index].dirty){
-                writebacks++;
-            }
-            // Update cache
-            if(access_type == MEMWRITE)
-                cache[index].blocks[lru_index].dirty = true;
-            else
-                cache[index].blocks[lru_index].dirty = false;
-            cache[index].blocks[lru_index].tag = tag;
-            cache[index].blocks[lru_index].valid = true;
-            // Update LRU
-            lru_stack_set_mru(cache[index].stack, lru_index);
-        }
+        printf("=====================\n");
     }
-        //printf("=====================\n");
-    ////////////////////////////////////////////////////////////////////
-    //  End of your code   
-    ////////////////////////////////////////////////////////////////////
 }
 
+void cachesim_load_MSHR_data(addr_t physical_addr, int access_type){
+    printf("-> Addr: %llx Type: %d\n",physical_addr,access_type);
+    bool replace_block;
+    unsigned int offset = 0;
+    unsigned int index = 0;
+    int tag = 0;
+    for(int i=0;i<num_offset_bits;i++){
+        offset = (offset << 1) + 1;
+    }
+    for(int i=0;i<num_index_bits;i++){
+        index = (index << 1) + 1;
+    }
+    offset = ((physical_addr >> 2) & offset);
+    index = ((physical_addr >> (num_offset_bits+2)) & index);
+    tag = (physical_addr >> (num_index_bits + num_offset_bits + 2));
+
+    for(int i=0;i<ways;i++){
+        replace_block = true;
+        if(!cache[index].blocks[i].valid){
+            // Cache is not full yet
+            replace_block = false;
+            // Update cache
+            cache[index].blocks[i].valid = true;
+            cache[index].blocks[i].tag = tag;
+            if(access_type == MEMWRITE)
+                cache[index].blocks[i].dirty = true;
+            // Update LRU
+            lru_stack_set_mru(cache[index].stack, i);
+            break;
+        }
+    }
+    if(replace_block){
+        // Cache is full
+        int lru_index = lru_stack_get_lru(cache[index].stack);
+        // Check if replacing block is dirty
+            //printf("Full! block %d is replacing\n",lru_index);
+        if(cache[index].blocks[lru_index].dirty){
+            // ! Not consider writeback cycles yet
+            writebacks++;
+        }
+        // Update cache
+        if(access_type == MEMWRITE)
+            cache[index].blocks[lru_index].dirty = true;
+        else
+            cache[index].blocks[lru_index].dirty = false;
+        cache[index].blocks[lru_index].tag = tag;
+        cache[index].blocks[lru_index].valid = true;
+        // Update LRU
+        lru_stack_set_mru(cache[index].stack, lru_index);
+    }
+}
 /**
- * Function to free up any dynamically allocated memory you allocated
+ * Function to free up any dynamically allocated memory.
  */
 void cachesim_cleanup() {
-    ////////////////////////////////////////////////////////////////////
-    //  TODO: Write the code to do any heap allocation cleanup
-    ////////////////////////////////////////////////////////////////////
     lru_stack_cleanup(cache->stack);
     mshr_queue_cleanup(cache->mshr_queue);
     free(cache->blocks);
     free(cache);
-    ////////////////////////////////////////////////////////////////////
-    //  End of your code   
-    ////////////////////////////////////////////////////////////////////
 }
 
 /**
- * Function to print cache statistics
- * DO NOT update what this prints.
+ * Function to print cache statistics.
  */
 void cachesim_print_stats() {
     printf("With %d ways associativity, %d sets, and %d bytes per block\n", ways, num_sets, block_size);
@@ -314,7 +366,7 @@ int next_line(FILE* trace) {
         int t;
         unsigned long long address, instr;
         fscanf(trace, "%d %llx %llx\n", &t, &address, &instr);
-        cachesim_access(address, t);
+        cachesim_access(address, t, 0);
     }
     return 1;
 }
@@ -338,6 +390,42 @@ int main(int argc, char **argv) {
     input = open_trace(argv[1]);
     cachesim_init(atol(argv[2]), atol(argv[3]), atol(argv[4]));
     while (next_line(input));
+    printf("Instruction input complete. Clearing MSHR Queue...\n");
+    // printf("Cycle: %lld\n", cycles);
+    for(int i = 0;i<cache->mshr_queue->entries;i++){
+        if(cache->mshr_queue[i].mshr->valid){
+            printf("MSHR Queue %d is not clear\n",i);
+        }
+        else{
+            printf("MSHR Queue %d is clear\n",i);
+        }
+    }
+    printf("=====================\n");
+    bool MSHR_clear = false;
+    bool MSHR_not_clear;
+    while(!MSHR_clear){
+        MSHR_not_clear = false;
+        for(int i=0;i<cache->mshr_queue->entries;i++){
+            if(cache->mshr_queue[i].mshr->valid)
+                MSHR_not_clear = true;
+            // Clear the MSHR
+            if(cache->mshr_queue[i].mshr->valid && cache->mshr_queue[i].mshr->data_returned){
+                printf("Clearing instruction of MSHR Queue %d\n",i);
+                cachesim_load_MSHR_data(cache->mshr_queue[i].mshr->block_addr, mshr_queue_clear_inst(cache->mshr_queue,i));
+            }
+        }
+        if(MSHR_not_clear){
+            MSHR_clear = false;
+            cycles++;
+            miss_cycles++;
+            mshr_queue_check_isssue(cache->mshr_queue);
+            mshr_queue_counter_add(cache->mshr_queue);
+            mshr_queue_check_data_returned(cache->mshr_queue);
+            printf("- Cycle: %lld\n", cycles);
+        }
+        else
+            MSHR_clear = true;
+    }
     cachesim_print_stats();
     cachesim_cleanup();
     fclose(input);

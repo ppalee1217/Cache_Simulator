@@ -1,5 +1,8 @@
 Sample Commands and Expected Outputs
 
+Compile with:
+gcc lrustack.h lrustack.c mshr.h mshr.c cachesim.h cachesim.c -o cachesim
+
 (1) Merge
 
 ./cachesim Traces/trace.merge.txt 32 65536 8
@@ -34,3 +37,7 @@ Sample Commands and Expected Outputs
 
 ./cachesim Traces/trace.gcc.txt 64 65536 4
 1000000, 995971, 4029, 1132
+
+(4)
+
+./cachesim Traces/trace.MSHR_test.txt 4 32 4

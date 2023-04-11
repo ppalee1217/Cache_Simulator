@@ -11,9 +11,9 @@
 #define IFETCH 2
 
 // Configurable parameters
-#define MISS_CYCLE 10
-#define MSHR_ENTRY 4
-#define MAF_ENTRY 4
+#define MISS_CYCLE 200
+#define MSHR_ENTRY 2
+#define MAF_ENTRY 2
 
 #include "lrustack.h"
 #include "mshr.h"
@@ -49,8 +49,9 @@ typedef struct cache_set_t {
 } cache_set_t;
 
 void cachesim_init(int block_size, int cache_size, int ways);
-void cachesim_access(addr_t physical_add, int access_type);
+void cachesim_access(addr_t physical_add, int access_type, unsigned int destination);
 void cachesim_cleanup(void);
 void cachesim_print_stats(void);
+void cachesim_load_MSHR_data(addr_t physical_addr, int access_type);
 
 #endif
