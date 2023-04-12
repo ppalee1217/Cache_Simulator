@@ -48,6 +48,18 @@ typedef struct cache_set_t {
 } cache_set_t;
 
 /**
+ * Struct for a request queue.
+ */
+
+typedef struct request_queue_t
+{
+  addr_t* request_addr;
+	int* request_type;
+  int queue_size;
+	int req_num;
+} request_queue_t;
+
+/**
  * Struct for a cache bank.
  */
 
@@ -55,7 +67,8 @@ typedef struct cache_bank_t
 {
   cache_set_t *cache_set;
   mshr_queue_t* mshr_queue;
-  int set_num;
+  request_queue_t* request_queue;
+	int set_num;
 } cache_bank_t;
 
 /**
@@ -69,7 +82,7 @@ typedef struct cache_t
 } cache_t;
 
 cache_set_t* cacheset_init(int block_size, int cache_size, int ways);
-void cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose, addr_t physical_add, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks, counter_t* cycles, counter_t* miss_cycles);
+int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose, addr_t physical_add, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks, counter_t* cycles, counter_t* miss_cycles);
 void cacheset_cleanup(cache_set_t* cache_set);
 void cacheset_load_MSHR_data(cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks);
 int simple_log_2(int x);

@@ -90,8 +90,9 @@ cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
  *      2 (instruction read). We have provided macros (MEMREAD, MEMWRITE, IFETCH)
  *      to reflect these values in cacheset.h so you can make your code more readable.
  * @param destination is the PE index that requested the access.
+ * @return maf result.
  */
-void cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t physical_addr, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks, counter_t* cycles, counter_t* miss_cycles) {
+int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t physical_addr, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks, counter_t* cycles, counter_t* miss_cycles) {
     // addr_t is a 64-bit unsigned integer.
     // Encoding:
     // [1:0]                                      : Byte offset
@@ -122,8 +123,6 @@ void cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t
     // (2) Write data: need to update dirty bit
     // (3) Inst. read: (not support if time is short)
 
-    // Issue to handle now: bitwise operation in C to get index & offset in address
-    *cycles = *cycles + 1;
     // printf("- Cycle: %lld\n", *cycles);
     unsigned int offset = 0;
     unsigned int index = 0;
@@ -184,81 +183,13 @@ void cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t
 
         // Update LRU
         lru_stack_set_mru(cache_set[index].stack, hit_index);
+        return 1;
     }
     else{
         printf("Miss! tag: %x is not inside cache\n",tag);
         // miss
         *misses = *misses + 1;
-        int maf_result = mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination);
-        // Check the MSHR Queue
-        if(maf_result == 1){
-            //* printf("This request is not in MSHR Queue, and is logged now\n");
-            // request is successfully logged and MAF is not full
-            // => check if the request is issued to DRAM, and log MAF (is done by mshr_queue_get_entry)
-            // * log instruction to MAF if the data is returned or not
-        }
-        else if(maf_result == 2){
-            //* printf("This request is in MSHR Queue, and MAF is not full yet.\n");
-            // request is successfully logged and MAF is not full
-            // => check if the request is issued to DRAM, and log MAF (is done by mshr_queue_get_entry)
-            // * log instruction to MAF if the data is returned or not
-        }
-        else if(maf_result == -1){
-            //* printf("This request is in MSHR Queue, but MAF is full.\n");
-            // request is already in the queue, but MAF is full
-            // => check if the request is issued to DRAM, and wait for this request to be done(stall => while loop)
-            // * Wait for data to return, and clear 1 instruction so that this new instruction can be logged.
-            // * meantime, MSHR will continue handle the returned data unexecuted instruction
-            *miss_cycles = *miss_cycles + 1;
-            bool data_back = false;
-            while(!mshr_queue_check_specific_data_returned(cache->cache_bank[choose].mshr_queue, physical_addr) && !data_back){
-                // printf("Waiting for specific data to return...\n");
-                *cycles = *cycles + 1;
-                // printf("- Cycle: %lld\n", *cycles);
-                *miss_cycles = *miss_cycles + 1;
-                for(int j=0;j<cache->bank_size;j++){
-                    mshr_queue_check_isssue(cache->cache_bank[j].mshr_queue);
-                    mshr_queue_counter_add(cache->cache_bank[j].mshr_queue);
-                    mshr_queue_check_data_returned(cache->cache_bank[j].mshr_queue);
-                    for(int i=0; i<cache->cache_bank[j].mshr_queue->entries;i++){
-                        if(cache->cache_bank[j].mshr_queue->mshr[i].data_returned && cache->cache_bank[j].mshr_queue->mshr[i].valid){
-                            printf("Clearing instruction of Bank %d MSHR Queue %d\n",cache->cache_bank[j].mshr_queue->bank_num,i);
-                            cacheset_load_MSHR_data(cache_set, cache->cache_bank[j].mshr_queue->mshr[i].block_addr, mshr_queue_clear_inst(cache->cache_bank[j].mshr_queue,i), writebacks);
-                            if(cache->cache_bank[choose].mshr_queue->mshr[i].block_addr == physical_addr)
-                                data_back = true;
-                        }
-                    }
-                }
-            }
-            // * log the info of unlogged MAF
-            mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination);
-            // printf("- Cycle: %lld\n", *cycles);
-        }
-        else{
-            //* printf("This request is not in MSHR Queue.\n");
-            *miss_cycles = *miss_cycles + 1;
-            // * MSHR queue is full, wait for any data to return, and then wait for the MAF queue to be cleared
-            while(mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination) != 1){
-                // printf("Waiting for any data to return & clear...\n");
-                *cycles = *cycles + 1;
-                // printf("- Cycle: %lld\n", *cycles);
-                *miss_cycles = *miss_cycles + 1;
-                for(int j=0;j<cache->bank_size;j++){
-                    mshr_queue_check_isssue(cache->cache_bank[j].mshr_queue);
-                    mshr_queue_counter_add(cache->cache_bank[j].mshr_queue);
-                    mshr_queue_check_data_returned(cache->cache_bank[j].mshr_queue);
-                    for(int i=0; i<cache->cache_bank[j].mshr_queue->entries;i++){
-                        if(cache->cache_bank[j].mshr_queue->mshr[i].data_returned && cache->cache_bank[j].mshr_queue->mshr[i].valid){
-                            printf("Clearing instruction of Bank %d MSHR Queue %d\n",cache->cache_bank[j].mshr_queue->bank_num,i);
-                            cacheset_load_MSHR_data(cache_set, cache->cache_bank[j].mshr_queue->mshr[i].block_addr, mshr_queue_clear_inst(cache->cache_bank[j].mshr_queue,i), writebacks);
-                        }
-                    }
-                }
-            }
-            // ! log the info of returned data to cache
-            // request is not in the queue
-        }
-        printf("=====================\n");
+        return(mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination));
     }
 }
 
