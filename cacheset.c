@@ -25,7 +25,7 @@ int simple_log_2(int x) {
 }
 
 int block_size;         // Block size
-int cache_size;         // Cache size
+int cache_set_size;         // Cache size
 int ways;               // Ways
 int num_sets;           // Number of sets
 int num_offset_bits;    // Number of offset bits
@@ -43,10 +43,10 @@ int num_index_bits;     // Number of index bits
 cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
     // Set cache parameters to global variables
     block_size = _block_size;   // In byte
-    cache_size = _cache_size;   // In byte
+    cache_set_size = _cache_size;   // In byte
     ways = _ways;
     // cache size = block size * ways * number of sets
-    num_sets = cache_size / (block_size * ways);
+    num_sets = cache_set_size / (block_size * ways);
     // num_offset_bits: the offset of desired data in cache block(if cache block size > 32)
     // this variable stands for bits number(size) in addr_t
     num_offset_bits = simple_log_2((block_size/4));
@@ -96,7 +96,7 @@ void cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t
     // Encoding:
     // [1:0]                                      : Byte offset
     // [num_offset_bits + 1: 2]                   : Data to fetch in cache block(if cache block size > 32)
-    // [num_offset_bits + num_index_bits + 1]     : Cache set index
+    // [num_offset_bits + num_index_bits + 1: num_offset_bits + 2] : Cache set index
     // [64: num_offset_bits + num_index_bits + 2] : Tag
 
     // 1.
@@ -127,7 +127,7 @@ void cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t
     // printf("- Cycle: %lld\n", *cycles);
     unsigned int offset = 0;
     unsigned int index = 0;
-    int tag = 0;
+    unsigned int tag = 0;
     for(int i=0;i<num_offset_bits;i++){
         offset = (offset << 1) + 1;
     }

@@ -13,10 +13,12 @@ counter_t cycles = 0;       // Total number of cycles
 counter_t miss_cycles = 0;  // Total number of cycles due to misses
 
 cache_t* cache;         // Data structure for the cache
-int block_size;         // Block size
+int cache_block_size;         // Block size
 int cache_size;         // Cache size
-int ways;               // Ways
-int num_sets;           // Number of sets
+int cache_ways;               // cache_ways
+int cache_num_sets;           // Number of sets
+int cache_num_offset_bits;    // Number of offset bits
+int cache_num_index_bits;     // Number of cache_set_index bits
 
 /**
  * Function to intialize your cache simulator with the given cache parameters. 
@@ -25,27 +27,33 @@ int num_sets;           // Number of sets
  * 
  * @param bank_size is the number of cache banks
  * @param _block_size is the block size in bytes
- * @param _cache_size is the cache size in bytes
+ * @param _cache_size is the cache bank size in bytes
  * @param _ways is the associativity
  */
 cache_bank_t* cachebank_init(int _bank_size) {
   cache_bank_t* cache_bank = (cache_bank_t*) malloc(_bank_size*sizeof(cache_bank_t));
+  printf("cache size = %d\n",cache_size);
+  printf("cache set num = %d\n",cache_num_sets);
   for(int i=0;i<_bank_size;i++) {
-    cache_bank[i].set_num = num_sets;
-    cache_bank[i].cache_set = cacheset_init(block_size, cache_size, ways);
+    cache_bank[i].set_num = cache_num_sets/4;
+    cache_bank[i].cache_set = cacheset_init(cache_block_size, cache_size/_bank_size, cache_ways);
+    printf("cache bank %d set num = %d\n",i,cache_num_sets/4);
+    printf("cache bank %d cache size = %d\n",i,cache_size/_bank_size);
     cache_bank[i].mshr_queue = init_mshr_queue(i ,MSHR_ENTRY, MAF_ENTRY);
   }
   return cache_bank;
 }
 
 void cache_init(int _bank_size, int _block_size, int _cache_size, int _ways) {
-  block_size = _block_size;   // In byte
+  cache_block_size = _block_size;   // In byte
   cache_size = _cache_size;   // In byte
-  ways = _ways;
-  num_sets = cache_size / (block_size * ways);
+  cache_ways = _ways;
   cache = (cache_t*) malloc(sizeof(cache_t));
+  cache_num_sets = cache_size / (cache_block_size * cache_ways);
   cache->bank_size = _bank_size;
   cache->cache_bank = cachebank_init(_bank_size);
+  cache_num_offset_bits = simple_log_2((cache_block_size/4));
+  cache_num_index_bits = simple_log_2(cache_num_sets);
 }
 
 /**
@@ -67,8 +75,32 @@ int next_line(FILE* trace) {
     else {
       int t;
       unsigned long long address, instr;
+      unsigned int index_mask = 0;
+      unsigned int cache_set_index = 0;
       fscanf(trace, "%d %llx %llx\n", &t, &address, &instr);
-      switch (address%16)
+      for(int i=0;i<cache_num_index_bits;i++){
+        index_mask = (index_mask << 1) + 1;
+      }
+      cache_set_index = ((address >> (cache_num_offset_bits+2)) & index_mask);
+      printf("cache_set_index = %d\n",cache_set_index);
+      // getchar();
+      // if(cache_set_index < cache_num_sets/4){
+      //   printf("Choose bank 0\n");
+      //   cacheset_access(cache->cache_bank[0].cache_set ,cache ,0 ,address , t, 0, &hits, &misses, &writebacks, &cycles, &miss_cycles);
+      // }
+      // else if(cache_set_index < cache_num_sets/2){
+      //   printf("Choose bank 1\n");
+      //   cacheset_access(cache->cache_bank[1].cache_set ,cache ,1 ,address , t, 0, &hits, &misses, &writebacks, &cycles, &miss_cycles);
+      // }
+      // else if(cache_set_index < cache_num_sets*3/4){
+      //   printf("Choose bank 1\n");
+      //   cacheset_access(cache->cache_bank[1].cache_set ,cache ,1 ,address , t, 0, &hits, &misses, &writebacks, &cycles, &miss_cycles);
+      // }
+      // else{
+      //   printf("Choose bank 3\n");
+      //   cacheset_access(cache->cache_bank[3].cache_set ,cache , 3,address , t, 0, &hits, &misses, &writebacks, &cycles, &miss_cycles);
+      // }
+      switch (cache_set_index & 0xF)
       {
         case 0:
         case 1:
@@ -116,7 +148,7 @@ int main(int argc, char **argv) {
 
     if (argc != 5) {
         fprintf(stderr, "Usage:\n  %s <trace> <block size(bytes)>"
-                        " <cache size(bytes)> <ways>\n", argv[0]);
+                        " <cache size(bytes)> <cache_ways>\n", argv[0]);
         return 1;
     }
     
@@ -182,7 +214,7 @@ int main(int argc, char **argv) {
  * Function to print cache statistics.
  */
 void cache_print_stats() {
-  printf("With %d ways associativity, %d sets, and %d bytes per cache set\n", ways, num_sets, block_size);
+  printf("With %d cache_ways associativity, %d sets, and %d bytes per cache set\n", cache_ways, cache_num_sets, cache_block_size);
   printf("Accesses       : %llu\n", accesses);
   printf("Hits           : %llu\n", hits); 
   printf("Misses         : %llu\n", misses); 

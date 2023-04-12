@@ -72,5 +72,5 @@ cache_set_t* cacheset_init(int block_size, int cache_size, int ways);
 void cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose, addr_t physical_add, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks, counter_t* cycles, counter_t* miss_cycles);
 void cacheset_cleanup(cache_set_t* cache_set);
 void cacheset_load_MSHR_data(cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks);
-
+int simple_log_2(int x);
 #endif
