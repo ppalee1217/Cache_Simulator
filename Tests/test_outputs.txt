@@ -1,7 +1,7 @@
 Sample Commands and Expected Outputs
 
 Compile with:
-gcc lrustack.h lrustack.c mshr.h mshr.c cachesim.h cachesim.c -o cachesim
+gcc lrustack.h lrustack.c mshr.h mshr.c cacheset.h cacheset.c cachebank.h cachebank.c -o cachesim
 
 (1) Merge
 

@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-#define MISS_CYCLE 200
+#define MISS_CYCLE 10
 
 typedef unsigned long long addr_t;
 
@@ -21,23 +21,24 @@ typedef struct mshr_t
   bool valid;
   bool issued;
   bool data_returned;
-  maf_t * maf;
   int maf_used_num;
   int maf_size;
   int counter;
   addr_t block_addr;
+  maf_t * maf;
 } mshr_t;
 
 typedef struct mshr_queue_t
 {
   int entries;
+  int bank_num;
   mshr_t * mshr;
 } mshr_queue_t;
 
 
-mshr_queue_t *init_mshr_queue(int entries, int inst_num);
+mshr_queue_t *init_mshr_queue(int bank_num, int entries, int inst_num);
 // Initialize the single MSHR
-mshr_t *init_mshr(int inst_num);
+mshr_t* init_mshr(int entires, int inst_num);
 
 int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination);
 // Get the index (in order) wants to issued to the DRAM
