@@ -92,7 +92,7 @@ cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
  * @param destination is the PE index that requested the access.
  * @return maf result.
  */
-int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t physical_addr, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks, counter_t* cycles, counter_t* miss_cycles) {
+int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t physical_addr, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks) {
     // addr_t is a 64-bit unsigned integer.
     // Encoding:
     // [1:0]                                      : Byte offset
