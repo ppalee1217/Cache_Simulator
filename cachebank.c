@@ -10,6 +10,10 @@ counter_t hits = 0;         // Total number of cache hits
 counter_t misses = 0;       // Total number of cache misses
 counter_t writebacks = 0;   // Total number of writebacks
 counter_t cycles = 0;       // Total number of cycles
+counter_t bank0_num = 0;    // Total number of bank0 accesses
+counter_t bank1_num = 0;    // Total number of bank1 accesses
+counter_t bank2_num = 0;    // Total number of bank2 accesses
+counter_t bank3_num = 0;    // Total number of bank3 accesses 
 
 cache_t* cache;         // Data structure for the cache
 int cache_block_size;         // Block size
@@ -102,10 +106,14 @@ void req_send_to_set(request_queue_t* request_queue, cache_bank_t* cache_bank, i
   // else, send the request to cache set
   if(cache_bank[choose].stall){
     if(cache_bank[choose].stall_type){
-      printf("Cache bank %d : waiting for specific data to return...\n",choose);
+    // printf("Cache bank %d : waiting for specific data to return...\n",choose);
+    // printf("Cache bank %d is waiting for addr %p to return.\n",choose,cache_bank[choose].stall_addr);
+      for(int i=0;i<cache_bank[choose].mshr_queue->entries;i++){
+        // printf("MSHR Queue %d address is %p => issue: %d, return: %d\n",i,cache_bank[choose].mshr_queue->mshr[i].block_addr,cache_bank[choose].mshr_queue->mshr[i].issued,cache_bank[choose].mshr_queue->mshr[i].data_returned);
+      }
     }
     else{
-      printf("Cache bank %d : waiting for any data to return & clear...\n",choose);
+    // printf("Cache bank %d : waiting for any data to return & clear...\n",choose);
     }
     return;
   }
@@ -118,7 +126,7 @@ void req_send_to_set(request_queue_t* request_queue, cache_bank_t* cache_bank, i
     offset = ((request_queue->request_addr[0] >> 2) & offset);
     // Check if the request queue is empty
     if(req_queue_empty(request_queue)){
-      printf("Request queue is empty, No need to send.\n");
+    // printf("Request queue is empty, No need to send.\n");
     }
     else{
       int maf_result = cacheset_access(cache_bank->cache_set, cache, choose, request_queue->request_addr[0], request_queue->request_type[0], 0, &hits, &misses, &writebacks);
@@ -157,7 +165,7 @@ void req_send_to_set(request_queue_t* request_queue, cache_bank_t* cache_bank, i
       // request is not in the queue
       // ! Remember to clear the request in the queue
       req_queue_forward(request_queue);
-      printf("Request queue %d num is now %d\n",choose,request_queue->req_num);
+    // printf("Request queue %d num is now %d\n",choose,request_queue->req_num);
     }
   }
 }
@@ -188,144 +196,155 @@ int next_line(FILE* trace) {
       index_mask = (index_mask << 1) + 1;
     }
     cache_set_index = ((address >> (cache_num_offset_bits+2)) & index_mask);
-    printf("cache_set_index = %d\n",cache_set_index);
+  // printf("cache_set_index = %d\n",cache_set_index);
     // getchar();
-    printf("Addr = %p\n",address);
+  // printf("Addr = %p\n",address);
     if(ADDRESSING_MODE == 0){
       switch (cache_set_index & 0xF){
         case 0:
         case 1:
         case 2:
         case 3:
-          printf("Choose bank 0\n");
+        // printf("Choose bank 0\n");
           if(req_queue_full(cache->cache_bank[0].request_queue)){
-            printf("request queue 0 is full\n");
-            printf("trace before fseek: %ld\n",ftell(trace));
+          // printf("request queue 0 is full\n");
+          // printf("trace before fseek: %ld\n",ftell(trace));
             fseek(trace, ftell(trace)-14, SEEK_SET);
-            printf("trace after fseek: %ld\n",ftell(trace));
+          // printf("trace after fseek: %ld\n",ftell(trace));
             return 2;
           }
           else{
+            bank0_num++;
             // cacheset_access(cache->cache_bank[0].cache_set ,cache ,0 ,address , t, 0, &hits, &misses, &writebacks, &cycles, &miss_cycles);
             load_request(cache->cache_bank[0].request_queue, address, t);
-            printf("request is load to queue 0\n");
+          // printf("request is load to queue 0\n");
           }
           break;
         case 4:
         case 5:
         case 6:
         case 7:
-          printf("Choose bank 1\n");
+        // printf("Choose bank 1\n");
           if(req_queue_full(cache->cache_bank[1].request_queue)){
-            printf("request queue 1 is full\n");
-            printf("trace before fseek: %ld\n",ftell(trace));
+          // printf("request queue 1 is full\n");
+          // printf("trace before fseek: %ld\n",ftell(trace));
             fseek(trace, ftell(trace)-14, SEEK_SET);
-            printf("trace after fseek: %ld\n",ftell(trace));
+          // printf("trace after fseek: %ld\n",ftell(trace));
+            if(ftell(trace)==4970){
+              getchar();
+            }
             return 2;
           }
           else{
+            bank1_num++;
             // cacheset_access(cache->cache_bank[1].cache_set ,cache ,1 ,address , t, 0, &hits, &misses, &writebacks, &cycles, &miss_cycles);
             load_request(cache->cache_bank[1].request_queue, address, t);
-            printf("request is load to queue 1\n");
+          // printf("request is load to queue 1\n");
           }
           break;
         case 8:
         case 9:
         case 10:
         case 11:
-          printf("Choose bank 2\n");
+        // printf("Choose bank 2\n");
           if(req_queue_full(cache->cache_bank[2].request_queue)){
-            printf("request queue 2 is full\n");
-            printf("trace before fseek: %ld\n",ftell(trace));
+          // printf("request queue 2 is full\n");
+          // printf("trace before fseek: %ld\n",ftell(trace));
             fseek(trace, ftell(trace)-14, SEEK_SET);
-            printf("trace after fseek: %ld\n",ftell(trace));
+          // printf("trace after fseek: %ld\n",ftell(trace));
             return 2;
           }
           else{
+            bank2_num++;
             // cacheset_access(cache->cache_bank[2].cache_set ,cache ,2 ,address , t, 0, &hits, &misses, &writebacks, &cycles, &miss_cycles);
             load_request(cache->cache_bank[2].request_queue, address, t);
-            printf("request is load to queue 2\n");
+          // printf("request is load to queue 2\n");
           }
           break;
         case 12:
         case 13:
         case 14:
         case 15:
-          printf("Choose bank 3\n");
+        // printf("Choose bank 3\n");
           if(req_queue_full(cache->cache_bank[3].request_queue)){
-            printf("request queue 3 is full\n");
-            printf("trace before fseek: %ld\n",ftell(trace));
+          // printf("request queue 3 is full\n");
+          // printf("trace before fseek: %ld\n",ftell(trace));
             fseek(trace, ftell(trace)-14, SEEK_SET);
-            printf("trace after fseek: %ld\n",ftell(trace));
+          // printf("trace after fseek: %ld\n",ftell(trace));
             return 2;
           }
           else{
+            bank3_num++;
             // cacheset_access(cache->cache_bank[3].cache_set ,cache ,3 ,address , t, 0, &hits, &misses, &writebacks, &cycles, &miss_cycles);
             load_request(cache->cache_bank[3].request_queue, address, t);
-            printf("request is load to queue 3\n");
+          // printf("request is load to queue 3\n");
           }
           break;
       }
     }
     else if(ADDRESSING_MODE == 1){
       if(cache_set_index < cache_num_sets/4){
-        printf("Choose bank 0\n");
+      // printf("Choose bank 0\n");
         if(req_queue_full(cache->cache_bank[0].request_queue)){
-          printf("request queue 0 is full\n");
-          printf("trace before fseek: %ld\n",ftell(trace));
+        // printf("request queue 0 is full\n");
+        // printf("trace before fseek: %ld\n",ftell(trace));
           fseek(trace, ftell(trace)-14, SEEK_SET);
-          printf("trace after fseek: %ld\n",ftell(trace));
+        // printf("trace after fseek: %ld\n",ftell(trace));
           return 2;
         }
         else{
+          bank0_num++;
           // cacheset_access(cache->cache_bank[0].cache_set ,cache ,0 ,address , t, 0, &hits, &misses, &writebacks, &cycles, &miss_cycles);
           load_request(cache->cache_bank[0].request_queue, address, t);
-          printf("request is load to queue 0\n");
+        // printf("request is load to queue 0\n");
         }
       }
       else if(cache_set_index < cache_num_sets/2){
-        printf("Choose bank 1\n");
+      // printf("Choose bank 1\n");
         if(req_queue_full(cache->cache_bank[1].request_queue)){
-          printf("request queue 1 is full\n");
-          printf("trace before fseek: %ld\n",ftell(trace));
+        // printf("request queue 1 is full\n");
+        // printf("trace before fseek: %ld\n",ftell(trace));
           fseek(trace, ftell(trace)-14, SEEK_SET);
-          printf("trace after fseek: %ld\n",ftell(trace));
+        // printf("trace after fseek: %ld\n",ftell(trace));
           return 2;
         }
         else{
+          bank1_num++;
           // cacheset_access(cache->cache_bank[1].cache_set ,cache ,1 ,address , t, 0, &hits, &misses, &writebacks, &cycles, &miss_cycles);
           load_request(cache->cache_bank[1].request_queue, address, t);
-          printf("request is load to queue 1\n");
+        // printf("request is load to queue 1\n");
         }
       }
       else if(cache_set_index < cache_num_sets*3/4){
-        printf("Choose bank 1\n");
+      // printf("Choose bank 1\n");
         if(req_queue_full(cache->cache_bank[2].request_queue)){
-          printf("request queue 2 is full\n");
-          printf("trace before fseek: %ld\n",ftell(trace));
+        // printf("request queue 2 is full\n");
+        // printf("trace before fseek: %ld\n",ftell(trace));
           fseek(trace, ftell(trace)-14, SEEK_SET);
-          printf("trace after fseek: %ld\n",ftell(trace));
+        // printf("trace after fseek: %ld\n",ftell(trace));
           return 2;
         }
         else{
+          bank2_num++;
           // cacheset_access(cache->cache_bank[2].cache_set ,cache ,2 ,address , t, 0, &hits, &misses, &writebacks, &cycles, &miss_cycles);
           load_request(cache->cache_bank[2].request_queue, address, t);
-          printf("request is load to queue 2\n");
+        // printf("request is load to queue 2\n");
         }
       }
       else{
-        printf("Choose bank 3\n");
+      // printf("Choose bank 3\n");
         if(req_queue_full(cache->cache_bank[3].request_queue)){
-          printf("request queue 3 is full\n");
-          printf("trace before fseek: %ld\n",ftell(trace));
+        // printf("request queue 3 is full\n");
+        // printf("trace before fseek: %ld\n",ftell(trace));
           fseek(trace, ftell(trace)-14, SEEK_SET);
-          printf("trace after fseek: %ld\n",ftell(trace));
+        // printf("trace after fseek: %ld\n",ftell(trace));
           return 2;
         }
         else{
+          bank3_num++;
           // cacheset_access(cache->cache_bank[3].cache_set ,cache ,3 ,address , t, 0, &hits, &misses, &writebacks, &cycles, &miss_cycles);
           load_request(cache->cache_bank[3].request_queue, address, t);
-          printf("request is load to queue 3\n");
+        // printf("request is load to queue 3\n");
         }
       }
     }
@@ -333,7 +352,7 @@ int next_line(FILE* trace) {
 
     }
     accesses++;
-    printf("--------------------\n");
+  // printf("--------------------\n");
   }
   return 1;
 }
@@ -359,40 +378,42 @@ int main(int argc, char **argv) {
     int input_status = 1;
     while (input_status != 0){
       cycles++;
-      printf("- Cycles: %lld\n",cycles);
-      printf("--------------------\n");
+      // printf("- Cycles: %lld\n",cycles);
+      // printf("--------------------\n");
       // * Load input to request queue
       for(int i =0;i<cache->bank_size;i++){
         input_status = next_line(input);
         if(input_status == 0){
-          printf("Instruction input complete.\n");
+          // printf("Instruction input complete.\n");
           break;
         }
         else if(input_status == 2){
-          printf("The desired request queue is full, need to handle request first.\n");
+          // printf("The desired request queue is full, need to handle request first.\n");
           break;
         }
       }
       // * Load each request in queue to Cache bank
       for(int j=0;j<cache->bank_size;j++){
+        // Update the status of MSQH queue of each bank
         mshr_queue_check_isssue(cache->cache_bank[j].mshr_queue);
         mshr_queue_counter_add(cache->cache_bank[j].mshr_queue);
         mshr_queue_check_data_returned(cache->cache_bank[j].mshr_queue);
+        // Check if data in each MSHR entries is returned
         for(int i=0; i<cache->cache_bank[j].mshr_queue->entries;i++){
           if(cache->cache_bank[j].mshr_queue->mshr[i].data_returned && cache->cache_bank[j].mshr_queue->mshr[i].valid){
-            printf("Clearing instruction of Bank %d MSHR Queue %d\n",j,i);
+          // printf("Clearing instruction of Bank %d MSHR Queue %d\n",j,i);
             // ! Check if return addr is satlling the cache bank
             if(cache->cache_bank[j].stall){
               if(cache->cache_bank[j].stall_type){
                 if(cache->cache_bank[j].stall_addr == cache->cache_bank[j].mshr_queue->mshr[i].block_addr){
-                  printf("Specific data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
+                // printf("Specific data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
                   cache->cache_bank[j].stall = false;
                   cache->cache_bank[j].stall_type = 0;
                   cache->cache_bank[j].stall_addr = 0;
                 }
               }
               else{
-                printf("Any data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
+              // printf("Any data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
                 cache->cache_bank[j].stall = false;
               }
             }
@@ -401,38 +422,38 @@ int main(int argc, char **argv) {
           }
         }
         if(!req_queue_empty(cache->cache_bank[j].request_queue)){
-          printf("Send request to bank %d (current req num = %d)\n",j,cache->cache_bank[j].request_queue->req_num);
+          // printf("Send request to bank %d (current req num = %d)\n",j,cache->cache_bank[j].request_queue->req_num);
           req_send_to_set(cache->cache_bank[j].request_queue, cache->cache_bank, j);
         }
         else{
-          printf("Bank %d request queue is empty\n",j);
+          // printf("Bank %d request queue is empty\n",j);
         }
-        printf("--------------------\n");
+        // printf("--------------------\n");
       }
-      printf("=====================\n");
+    // printf("=====================\n");
       // getchar();
     }
     // ! not done yet => request queue need to be cleared
-    printf("Instruction input complete. Clearing Request Queue & MSHR Queue...\n");
+  // printf("Instruction input complete. Clearing Request Queue & MSHR Queue...\n");
     // printf("Cycle: %lld\n", cycles);
     for(int j = 0;j<cache->bank_size;j++){
-      printf("Bank %d:\n",j);
+    // printf("Bank %d:\n",j);
       for(int i = 0;i<cache->cache_bank[j].mshr_queue->entries;i++){
           if(cache->cache_bank[j].mshr_queue->mshr[i].valid){
-            printf("Bank %d MSHR Queue %d is not clear\n",j,i);
+          // printf("Bank %d MSHR Queue %d is not clear\n",j,i);
           }
           else{
-            printf("Bank %d MSHR Queue %d is clear\n",j,i);
+          // printf("Bank %d MSHR Queue %d is clear\n",j,i);
           }
       }
       if(cache->cache_bank[j].request_queue->req_num != 0){
-        printf("Bank %d Request Queue is not clear\n",j);
+      // printf("Bank %d Request Queue is not clear\n",j);
       }
       else{
-        printf("Bank %d Request Queue is clear\n",j);
+      // printf("Bank %d Request Queue is clear\n",j);
       }
     }
-    printf("=====================\n");
+  // printf("=====================\n");
     bool MSHR_clear = false;
     bool MSHR_not_clear;
     while(!MSHR_clear){
@@ -444,19 +465,19 @@ int main(int argc, char **argv) {
             MSHR_not_clear = true;
           // Clear the MSHR
           if(cache->cache_bank[j].mshr_queue->mshr[i].valid && cache->cache_bank[j].mshr_queue->mshr[i].data_returned){
-            printf("Clearing instruction of Bank %d MSHR Queue %d\n",j,i);
+          // printf("Clearing instruction of Bank %d MSHR Queue %d\n",j,i);
             // ! Check if return addr is satlling the cache bank
             if(cache->cache_bank[j].stall){
               if(cache->cache_bank[j].stall_type){
                 if(cache->cache_bank[j].stall_addr == cache->cache_bank[j].mshr_queue->mshr[i].block_addr){
-                  printf("Specific data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
+                // printf("Specific data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
                   cache->cache_bank[j].stall = false;
                   cache->cache_bank[j].stall_type = 0;
                   cache->cache_bank[j].stall_addr = 0;
                 }
               }
               else{
-                printf("Any data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
+              // printf("Any data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
                 cache->cache_bank[j].stall = false;
               }
             }
@@ -471,7 +492,7 @@ int main(int argc, char **argv) {
       //* If MSHR is not clear, add cycle and check if data returned
       if(MSHR_not_clear){
         cycles++;
-        printf("- Cycles: %lld\n",cycles);
+      // printf("- Cycles: %lld\n",cycles);
         MSHR_clear = false;
         for(int j = 0;j<cache->bank_size; j++){
           mshr_queue_check_isssue(cache->cache_bank[j].mshr_queue);
@@ -482,7 +503,7 @@ int main(int argc, char **argv) {
       }
       else
         MSHR_clear = true;
-      printf("=====================\n");
+    // printf("=====================\n");
     }
     cache_print_stats();
     // Cleanup
@@ -501,12 +522,16 @@ int main(int argc, char **argv) {
  */
 void cache_print_stats() {
   printf("With %d cache_ways associativity, %d sets, and %d bytes per cache set\n", cache_ways, cache_num_sets, cache_block_size);
-  printf("Accesses       : %llu\n", accesses);
-  printf("Hits           : %llu\n", hits); 
-  printf("Misses         : %llu\n", misses); 
-  printf("Writebacks     : %llu\n", writebacks); 
-  printf("Cycles         : %llu\n", cycles);
-  printf("Hit rate       : %.3f%%\n", (double)hits/accesses*100);
-  printf("Miss rate      : %.3f%%\n", (double)misses/accesses*100);
-  printf("Writeback rate : %.3f%%\n", (double)writebacks/accesses*100);
+  printf("Accesses        : %llu\n", accesses);
+  printf("Hits            : %llu\n", hits); 
+  printf("Misses          : %llu\n", misses); 
+  printf("Writebacks      : %llu\n", writebacks); 
+  printf("Cycles          : %llu\n", cycles);
+  printf("Hit rate        : %.3f%%\n", (double)hits/accesses*100);
+  printf("Miss rate       : %.3f%%\n", (double)misses/accesses*100);
+  printf("Writeback rate  : %.3f%%\n", (double)writebacks/accesses*100);
+  printf("Bank 0 used rate: %.3f%%\n", (double)bank0_num/accesses*100);
+  printf("Bank 1 used rate: %.3f%%\n", (double)bank1_num/accesses*100);
+  printf("Bank 2 used rate: %.3f%%\n", (double)bank2_num/accesses*100);
+  printf("Bank 3 used rate: %.3f%%\n", (double)bank3_num/accesses*100);
 }

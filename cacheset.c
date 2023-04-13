@@ -144,21 +144,6 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         // for(int i=0;i<ways;i++){
         //     printf("Cache[%d] Block[%d] = %x, valid = %d, Priority = %d\n",index,i,cache_set[index].blocks[i].tag,cache_set[index].blocks[i].valid,cache_set[index].stack->priority[i]);
         // }
-    for(int j=0;j<cache->bank_size;j++){
-        // ! Issued the request in MSHR queue (1 only in 1 cycle)
-        mshr_queue_check_isssue(cache->cache_bank[j].mshr_queue);
-        // ! Add counter of every mshr queue entry that issued
-        mshr_queue_counter_add(cache->cache_bank[j].mshr_queue);
-        // ! Check if the requested data is returned
-        mshr_queue_check_data_returned(cache->cache_bank[j].mshr_queue);
-        // ! Log the new returned data to cache & clear 1 instruction
-        for(int i=0; i<cache->cache_bank[j].mshr_queue->entries;i++){
-            if(cache->cache_bank[j].mshr_queue->mshr[i].data_returned && cache->cache_bank[j].mshr_queue->mshr[i].valid){
-                printf("Clearing instruction of Bank %d MSHR Queue %d\n",cache->cache_bank[j].mshr_queue->bank_num,i);
-                cacheset_load_MSHR_data(cache_set, cache->cache_bank[j].mshr_queue->mshr[i].block_addr, mshr_queue_clear_inst(cache->cache_bank[j].mshr_queue,i), writebacks);
-            }
-        }
-    }
     // Check if new data hit or miss
     bool hit;
     int hit_index = 0;
@@ -231,7 +216,7 @@ void cacheset_load_MSHR_data(cache_set_t* cache_set, addr_t physical_addr, int a
             //printf("Full! block %d is replacing\n",lru_index);
         if(cache_set[index].blocks[lru_index].dirty){
             // ! Not consider writeback cycles yet
-            *writebacks++;
+            *writebacks = *writebacks + 1;
         }
         // Update cache
         if(access_type == MEMWRITE)

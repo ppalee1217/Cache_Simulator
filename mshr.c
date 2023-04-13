@@ -80,12 +80,12 @@ int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, uns
   // printf("empty_entry = %d\n", empty_entry);
   // Check if there is any empty entry left
   if(empty_entry != -1){
-    printf("Bank %d MSHR %d is empty, new MSHR entry is added\n",queue->bank_num, empty_entry);
-    printf("Also, MAF %d is not full, new MAF entry is added\n", 0);
+    // printf("Bank %d MSHR %d is empty, new MSHR entry is added\n",queue->bank_num, empty_entry);
+    // printf("Also, MAF %d is not full, new MAF entry is added\n", 0);
     queue->mshr[empty_entry].valid = true;
     queue->mshr[empty_entry].issued = false;
     queue->mshr[empty_entry].block_addr = block_addr;
-    printf("Block address of queue %d is %llx\n", empty_entry, queue->mshr[empty_entry].block_addr);
+    // printf("Block address of queue %d is %llx\n", empty_entry, queue->mshr[empty_entry].block_addr);
     queue->mshr[empty_entry].maf[0].valid = true;
     queue->mshr[empty_entry].maf[0].type = type;
     queue->mshr[empty_entry].maf_used_num++;
@@ -99,7 +99,7 @@ int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, uns
 
 int mshr_queue_check_isssue(mshr_queue_t* queue){
   for(int i =0 ;i<queue->entries;i++){
-    // printf("Bank %d MSHR %d is valid: %d, is issued: %d\n",queue->bank_num, i, queue->mshr[i].valid, queue->mshr[i].issued);
+    // printf("-- Bank %d MSHR %d is valid: %d, is issued: %d\n",queue->bank_num, i, queue->mshr[i].valid, queue->mshr[i].issued);
     if(queue->mshr[i].valid && !queue->mshr[i].issued){
       queue->mshr[i].issued = true;
       printf("Bank %d MSHR %d issued.\n",queue->bank_num, i);
