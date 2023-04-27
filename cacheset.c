@@ -162,7 +162,7 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         // Read: consider block index
         cache->cache_bank[choose].hit_num++;
         printf("- Choose bank = %d\n",choose);
-        getchar();
+        // getchar();
         // Write: need to update dirty bit also
         if(access_type == MEMWRITE)
             cache_set[index].blocks[hit_index].dirty = true;

@@ -12,7 +12,7 @@
 
 // Configurable parameters
 #define MISS_CYCLE 10
-#define MSHR_ENTRY 4
+#define MSHR_ENTRY 8
 #define MAF_ENTRY 3
 
 #include "lrustack.h"
