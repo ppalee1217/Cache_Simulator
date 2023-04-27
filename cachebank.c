@@ -20,8 +20,9 @@ int cache_block_size;         // Block size
 int cache_size;         // Cache size
 int cache_ways;               // cache_ways
 int cache_num_sets;           // Number of sets
-int cache_num_offset_bits;    // Number of offset bits
+int cache_num_offset_bits;    // Number of block bits
 int cache_num_index_bits;     // Number of cache_set_index bits
+int direct_map_index_bits;    // Number of direct_map_index bits
 
 request_queue_t* req_queue_init(int _queue_size){
   request_queue_t* request_queue = (request_queue_t*) malloc(sizeof(request_queue_t));
@@ -66,6 +67,7 @@ void cache_init(int _bank_size, int _block_size, int _cache_size, int _ways) {
   cache->cache_bank = cachebank_init(_bank_size);
   cache_num_offset_bits = simple_log_2((cache_block_size/4));
   cache_num_index_bits = simple_log_2(cache_num_sets);
+  direct_map_index_bits = simple_log_2(cache_num_sets*cache_ways);
 }
 
 void load_request(request_queue_t* request_queue, addr_t addr, int type){
@@ -190,22 +192,25 @@ int next_line(FILE* trace) {
     int t;
     unsigned long long address, instr;
     unsigned int index_mask = 0;
+    unsigned int real_index_mask = 0;
     unsigned int cache_set_index = 0;
     fscanf(trace, "%d %llx %llx\n", &t, &address, &instr);
-    for(int i=0;i<cache_num_index_bits;i++){
+    for(int i=0;i<direct_map_index_bits;i++){
+      if(i<cache_num_index_bits)
+        real_index_mask = (real_index_mask << 1) + 1;
       index_mask = (index_mask << 1) + 1;
     }
     cache_set_index = ((address >> (cache_num_offset_bits+2)) & index_mask);
-  // printf("cache_set_index = %d\n",cache_set_index);
-    // getchar();
-  // printf("Addr = %p\n",address);
+    printf("Cache_set_index = %d\n",cache_set_index);
+    printf("direct map index bit length = %d\n",direct_map_index_bits);
+    printf("Actucaly index = %lld\n",((address >> (cache_num_offset_bits+2)) & real_index_mask));
+    printf("way associative index bit length = %d\n",cache_num_index_bits);
+    // printf("Addr = %p\n",address);
     if(ADDRESSING_MODE == 0){
-      switch (cache_set_index & 0xF){
+      switch (cache_set_index & 0x3){
         case 0:
-        case 1:
-        case 2:
-        case 3:
-        // printf("Choose bank 0\n");
+          printf("Choose bank 0\n");
+          getchar();
           if(req_queue_full(cache->cache_bank[0].request_queue)){
           // printf("request queue 0 is full\n");
           // printf("trace before fseek: %ld\n",ftell(trace));
@@ -220,11 +225,9 @@ int next_line(FILE* trace) {
           // printf("request is load to queue 0\n");
           }
           break;
-        case 4:
-        case 5:
-        case 6:
-        case 7:
-        // printf("Choose bank 1\n");
+        case 1:
+          printf("Choose bank 1\n");
+          getchar();
           if(req_queue_full(cache->cache_bank[1].request_queue)){
           // printf("request queue 1 is full\n");
           // printf("trace before fseek: %ld\n",ftell(trace));
@@ -242,11 +245,9 @@ int next_line(FILE* trace) {
           // printf("request is load to queue 1\n");
           }
           break;
-        case 8:
-        case 9:
-        case 10:
-        case 11:
-        // printf("Choose bank 2\n");
+        case 2:
+          printf("Choose bank 2\n");
+          getchar();
           if(req_queue_full(cache->cache_bank[2].request_queue)){
           // printf("request queue 2 is full\n");
           // printf("trace before fseek: %ld\n",ftell(trace));
@@ -261,11 +262,9 @@ int next_line(FILE* trace) {
           // printf("request is load to queue 2\n");
           }
           break;
-        case 12:
-        case 13:
-        case 14:
-        case 15:
-        // printf("Choose bank 3\n");
+        case 3:
+          printf("Choose bank 3\n");
+          getchar();
           if(req_queue_full(cache->cache_bank[3].request_queue)){
           // printf("request queue 3 is full\n");
           // printf("trace before fseek: %ld\n",ftell(trace));
@@ -283,7 +282,7 @@ int next_line(FILE* trace) {
       }
     }
     else if(ADDRESSING_MODE == 1){
-      if(cache_set_index < cache_num_sets/4){
+      if(cache_set_index < (cache_num_sets*cache_ways)/4){
       // printf("Choose bank 0\n");
         if(req_queue_full(cache->cache_bank[0].request_queue)){
         // printf("request queue 0 is full\n");
@@ -299,7 +298,7 @@ int next_line(FILE* trace) {
         // printf("request is load to queue 0\n");
         }
       }
-      else if(cache_set_index < cache_num_sets/2){
+      else if(cache_set_index < (cache_num_sets*cache_ways)/2){
       // printf("Choose bank 1\n");
         if(req_queue_full(cache->cache_bank[1].request_queue)){
         // printf("request queue 1 is full\n");
@@ -315,7 +314,7 @@ int next_line(FILE* trace) {
         // printf("request is load to queue 1\n");
         }
       }
-      else if(cache_set_index < cache_num_sets*3/4){
+      else if(cache_set_index < (cache_num_sets*cache_ways)*3/4){
       // printf("Choose bank 1\n");
         if(req_queue_full(cache->cache_bank[2].request_queue)){
         // printf("request queue 2 is full\n");

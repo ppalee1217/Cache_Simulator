@@ -8,7 +8,7 @@
 // Configurable parameters
 #define BANK_SIZE 4
 #define REQ_QUEUE_SIZE 4
-#define ADDRESSING_MODE 1
+#define ADDRESSING_MODE 0
 
 cache_bank_t* cachebank_init(int _bank_size);
 request_queue_t* req_queue_init(int _queue_size);
