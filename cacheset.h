@@ -12,8 +12,8 @@
 
 // Configurable parameters
 #define MISS_CYCLE 10
-#define MSHR_ENTRY 6
-#define MAF_ENTRY 1
+#define MSHR_ENTRY 4
+#define MAF_ENTRY 3
 
 #include "lrustack.h"
 #include "mshr.h"
@@ -72,6 +72,13 @@ typedef struct cache_bank_t
 	bool stall;
 	bool stall_type;	// 1: waiting for specific address, 0: waiting for any address
 	addr_t stall_addr;
+	// * For non-MSHR design
+	int stall_counter;
+	int inst_type;
+	// ! For statistics per bank
+	int hit_num;
+	int miss_num;
+	int writeback_num;
 } cache_bank_t;
 
 /**
@@ -87,6 +94,6 @@ typedef struct cache_t
 cache_set_t* cacheset_init(int block_size, int cache_size, int ways);
 int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose, addr_t physical_add, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks);
 void cacheset_cleanup(cache_set_t* cache_set);
-void cacheset_load_MSHR_data(cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks);
+void cacheset_load_MSHR_data(cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced);
 int simple_log_2(int x);
 #endif

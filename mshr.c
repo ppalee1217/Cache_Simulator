@@ -14,6 +14,12 @@
 mshr_queue_t* init_mshr_queue(int bank_num, int entires, int inst_num) {
   //  Use malloc to dynamically allocate a mshr_queue_t
 	mshr_queue_t* queue = (mshr_queue_t*) malloc(sizeof(mshr_queue_t));
+  if(entires == 0){
+    queue->enable_mshr = false;
+  }
+  else{
+    queue->enable_mshr = true;
+  }
   queue->entries = entires;
   queue->bank_num = bank_num;
   queue->mshr = init_mshr(entires ,inst_num);
@@ -28,14 +34,16 @@ mshr_queue_t* init_mshr_queue(int bank_num, int entires, int inst_num) {
  */
 mshr_t* init_mshr(int entires, int inst_num){
   mshr_t* mshr = (mshr_t*) malloc(sizeof(mshr_t)*entires);
-  for(int j=0;j<entires;j++){
-    mshr[j].valid = false;
-    mshr[j].issued = false;
-    mshr[j].maf_size = inst_num;
-    mshr[j].maf = (maf_t*) malloc(sizeof(maf_t)*inst_num);
-    mshr[j].maf_used_num = 0;
-    for(int i = 0; i<inst_num;i++){
-      mshr[j].maf[i].valid = false;
+  if(entires != 0){
+    for(int j=0;j<entires;j++){
+      mshr[j].valid = false;
+      mshr[j].issued = false;
+      mshr[j].maf_size = inst_num;
+      mshr[j].maf = (maf_t*) malloc(sizeof(maf_t)*inst_num);
+      mshr[j].maf_used_num = 0;
+      for(int i = 0; i<inst_num;i++){
+        mshr[j].maf[i].valid = false;
+      }
     }
   }
   return mshr;
@@ -48,53 +56,58 @@ mshr_t* init_mshr(int entires, int inst_num){
  * @return -1 if the MAF is full, 0 if the MSHR is full, 1 if the request is not in MSHR, 2 if the request is in MSHR and MAF is not full.
  */
 int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination){
-  int empty_entry = -1;
-  for(int i =0 ;i<queue->entries;i++){
-    if(queue->mshr[i].valid && queue->mshr[i].block_addr == block_addr){
-      // This entry is already exist
-      printf("Bank %d MSHR %d is already exist\n",queue->bank_num, i);
-      for(int j = 0; j<queue->mshr[i].maf_size;j++){
-        if(!queue->mshr[i].maf[j].valid){
-          // MAF is not full
-          printf("Bank %d MAF %d is not full, new MAF entry is added\n",queue->bank_num, j);
-          queue->mshr[i].maf[j].valid = true;
-          queue->mshr[i].maf[j].type = type;
-          queue->mshr[i].maf_used_num++;
-          // queue->mshr[i].maf[j].block_offsset = block_offset;
-          // queue->mshr[i].maf[j].destination = destination;
-          return 2;
+  if(queue->enable_mshr){
+    int empty_entry = -1;
+    for(int i =0 ;i<queue->entries;i++){
+      if(queue->mshr[i].valid && queue->mshr[i].block_addr == block_addr){
+        // This entry is already exist
+        printf("Bank %d MSHR %d is already exist\n",queue->bank_num, i);
+        for(int j = 0; j<queue->mshr[i].maf_size;j++){
+          if(!queue->mshr[i].maf[j].valid){
+            // MAF is not full
+            printf("Bank %d MAF %d is not full, new MAF entry is added\n",queue->bank_num, j);
+            queue->mshr[i].maf[j].valid = true;
+            queue->mshr[i].maf[j].type = type;
+            queue->mshr[i].maf_used_num++;
+            // queue->mshr[i].maf[j].block_offsset = block_offset;
+            // queue->mshr[i].maf[j].destination = destination;
+            return 2;
+          }
         }
+        // If MAF is full, return -1 (to stall the pipeline)
+        printf("MAF is full, stall the pipeline\n");
+        return -1;
       }
-      // If MAF is full, return -1 (to stall the pipeline)
-      printf("MAF is full, stall the pipeline\n");
-      return -1;
     }
-  }
-  for(int i=0;i<queue->entries;i++){
-    // Always tend to find an empty entry has lower index
-    if(!queue->mshr[i].valid){
-      empty_entry = i;
-      break;
+    for(int i=0;i<queue->entries;i++){
+      // Always tend to find an empty entry has lower index
+      if(!queue->mshr[i].valid){
+        empty_entry = i;
+        break;
+      }
     }
+    // printf("empty_entry = %d\n", empty_entry);
+    // Check if there is any empty entry left
+    if(empty_entry != -1){
+      // printf("Bank %d MSHR %d is empty, new MSHR entry is added\n",queue->bank_num, empty_entry);
+      // printf("Also, MAF %d is not full, new MAF entry is added\n", 0);
+      queue->mshr[empty_entry].valid = true;
+      queue->mshr[empty_entry].issued = false;
+      queue->mshr[empty_entry].block_addr = block_addr;
+      // printf("Block address of queue %d is %llx\n", empty_entry, queue->mshr[empty_entry].block_addr);
+      queue->mshr[empty_entry].maf[0].valid = true;
+      queue->mshr[empty_entry].maf[0].type = type;
+      queue->mshr[empty_entry].maf_used_num++;
+      // queue->mshr[empty_entry].maf[0].block_offsset = block_offset;
+      // queue->mshr[empty_entry].maf[0].destination = destination;
+      return 1;
+    }
+    // If there is no empty entry left, return false (to stall the pipeline)
+    return 0;
   }
-  // printf("empty_entry = %d\n", empty_entry);
-  // Check if there is any empty entry left
-  if(empty_entry != -1){
-    // printf("Bank %d MSHR %d is empty, new MSHR entry is added\n",queue->bank_num, empty_entry);
-    // printf("Also, MAF %d is not full, new MAF entry is added\n", 0);
-    queue->mshr[empty_entry].valid = true;
-    queue->mshr[empty_entry].issued = false;
-    queue->mshr[empty_entry].block_addr = block_addr;
-    // printf("Block address of queue %d is %llx\n", empty_entry, queue->mshr[empty_entry].block_addr);
-    queue->mshr[empty_entry].maf[0].valid = true;
-    queue->mshr[empty_entry].maf[0].type = type;
-    queue->mshr[empty_entry].maf_used_num++;
-    // queue->mshr[empty_entry].maf[0].block_offsset = block_offset;
-    // queue->mshr[empty_entry].maf[0].destination = destination;
-    return 1;
+  else{
+
   }
-  // If there is no empty entry left, return false (to stall the pipeline)
-  return 0;
 }
 
 int mshr_queue_check_isssue(mshr_queue_t* queue){

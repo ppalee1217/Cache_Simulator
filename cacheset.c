@@ -53,15 +53,15 @@ cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
     // num_index_bits: the index of desired cache set
     // this variable stands for bits number(size) in addr_t
     num_index_bits = simple_log_2(num_sets);
-        // printf("num_sets: %d\n",num_sets);
-        // printf("num_offset_bits: %d\n",num_offset_bits);
-        // printf("num_index_bits: %d\n",num_index_bits);
-        // printf("Offset in bit: %x\n",offset);
-        // printf("Index in bit: %x\n",index);
-        // printf("[1:0]: Byte offset\n");
-        // printf("[%d:2]: Block offset\n",num_offset_bits + 1);
-        // printf("[%d:%d]: Cache index\n",num_offset_bits + num_index_bits + 1,num_offset_bits + 2);
-        // printf("[64:%d]: Tag\n",num_offset_bits + num_index_bits + 2);
+    // printf("num_sets: %d\n",num_sets);
+    // printf("num_offset_bits: %d\n",num_offset_bits);
+    // printf("num_index_bits: %d\n",num_index_bits);
+    // printf("Offset in bit: %x\n",offset);
+    // printf("Index in bit: %x\n",index);
+    // printf("[1:0]: Byte offset\n");
+    // printf("[%d:2]: Block offset\n",num_offset_bits + 1);
+    // printf("[%d:%d]: Cache index\n",num_offset_bits + num_index_bits + 1,num_offset_bits + 2);
+    // printf("[64:%d]: Tag\n",num_offset_bits + num_index_bits + 2);
     // Initializing cache
     cache_set_t* cache_set = (cache_set_t*) malloc(num_sets * sizeof(cache_set_t));
     for(int i=0;i<num_sets;i++){
@@ -160,7 +160,9 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         // hit
         *hits = *hits + 1;
         // Read: consider block index
-        
+        cache->cache_bank[choose].hit_num++;
+        printf("- Choose bank = %d\n",choose);
+        getchar();
         // Write: need to update dirty bit also
         if(access_type == MEMWRITE)
             cache_set[index].blocks[hit_index].dirty = true;
@@ -168,17 +170,23 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
 
         // Update LRU
         lru_stack_set_mru(cache_set[index].stack, hit_index);
-        return 1;
+        return 3;
     }
     else{
         printf("Miss! tag: %x is not inside cache\n",tag);
         // miss
         *misses = *misses + 1;
-        return(mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination));
+        cache->cache_bank[choose].miss_num++;
+        if(cache->cache_bank[choose].mshr_queue->enable_mshr){
+            return(mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination));
+        }
+        else{
+            return 0;
+        }
     }
 }
 
-void cacheset_load_MSHR_data(cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks){
+void cacheset_load_MSHR_data(cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced){
     printf("-> Addr: %llx Type: %d\n",physical_addr,access_type);
     bool replace_block;
     unsigned int offset = 0;
@@ -217,6 +225,9 @@ void cacheset_load_MSHR_data(cache_set_t* cache_set, addr_t physical_addr, int a
         if(cache_set[index].blocks[lru_index].dirty){
             // ! Not consider writeback cycles yet
             *writebacks = *writebacks + 1;
+        }
+        else{
+            *non_dirty_replaced = *non_dirty_replaced + 1;
         }
         // Update cache
         if(access_type == MEMWRITE)

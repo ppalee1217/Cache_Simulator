@@ -30,6 +30,7 @@ typedef struct mshr_t
 
 typedef struct mshr_queue_t
 {
+  bool enable_mshr;
   int entries;
   int bank_num;
   mshr_t * mshr;
