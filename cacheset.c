@@ -123,7 +123,6 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
     // (2) Write data: need to update dirty bit
     // (3) Inst. read: (not support if time is short)
 
-    // printf("- Cycle: %lld\n", *cycles);
     unsigned int offset = 0;
     unsigned int index = 0;
     unsigned int tag = 0;
@@ -145,6 +144,13 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         //     printf("Cache[%d] Block[%d] = %x, valid = %d, Priority = %d\n",index,i,cache_set[index].blocks[i].tag,cache_set[index].blocks[i].valid,cache_set[index].stack->priority[i]);
         // }
     // Check if new data hit or miss
+    // printf("bank = %d\n",choose);
+    // printf("index = %d\n",index);
+    // printf("tag = %x\n",tag);
+    // for(int i = 0;i<ways;i++){
+    //     printf("index %d ways %d tag = %x\n",index,i,cache_set[index].blocks[i].tag);
+    // }
+    // getchar();
     bool hit;
     int hit_index = 0;
     for(int i=0;i<ways;i++){
@@ -152,7 +158,7 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         if(cache_set[index].blocks[i].tag == tag && cache_set[index].blocks[i].valid){
             hit = true;
             hit_index = i;
-            printf("Hit! tag: %x is inside cache set %d block %d\n",tag,index,i);
+            printf("Hit! tag: %x is inside cache bank %d set %d block %d\n",tag,choose,index,i);
             break;
         }
     }
@@ -186,7 +192,7 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
     }
 }
 
-void cacheset_load_MSHR_data(cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced){
+void cacheset_load_MSHR_data(int set_num, int choose, cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced){
     printf("-> Addr: %llx Type: %d\n",physical_addr,access_type);
     bool replace_block;
     unsigned int offset = 0;
@@ -201,7 +207,12 @@ void cacheset_load_MSHR_data(cache_set_t* cache_set, addr_t physical_addr, int a
     offset = ((physical_addr >> 2) & offset);
     index = ((physical_addr >> (num_offset_bits+2)) & index);
     tag = (physical_addr >> (num_index_bits + num_offset_bits + 2));
-
+    if(choose != 0){
+        printf("Cache bank %d get returned data.\n",choose);
+        printf("index (before) = %d\n",index);
+        printf("index (after) = %d\n",index - (set_num * choose - 1));
+        getchar();
+    }
     for(int i=0;i<ways;i++){
         replace_block = true;
         if(!cache_set[index].blocks[i].valid){
