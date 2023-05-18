@@ -4,6 +4,12 @@ Compile with:
 gcc lrustack.h lrustack.c mshr.h mshr.c cacheset.h cacheset.c cachebank.h cachebank.c -o cachesim
 
 access, hits, misses, writebacks
+
+(0) Bank test
+./cachesim Traces/trace.bank_test.txt 32 65536 8
+./cachesim Traces/trace.bank_test2.txt 32 65536 8
+./cachesim Traces/trace.random.txt 32 65536 8
+
 (1) Merge
 
 ./cachesim Traces/trace.merge.txt 32 65536 8

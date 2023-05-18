@@ -30,6 +30,7 @@ typedef struct mshr_t
 
 typedef struct mshr_queue_t
 {
+  int tag;
   bool enable_mshr;
   int entries;
   int bank_num;
@@ -41,7 +42,7 @@ mshr_queue_t *init_mshr_queue(int bank_num, int entries, int inst_num);
 // Initialize the single MSHR
 mshr_t* init_mshr(int entires, int inst_num);
 
-int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination);
+int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination, int tag);
 // Get the index (in order) wants to issued to the DRAM
 // If there is no entry wants to issue, return -1
 int mshr_queue_check_isssue(mshr_queue_t* queue);
@@ -56,5 +57,6 @@ void mshr_queue_check_data_returned(mshr_queue_t* queue);
 bool mshr_queue_check_specific_data_returned(mshr_queue_t* queue, unsigned long long block_addr);
 
 void mshr_queue_counter_add(mshr_queue_t* queue);
+void clear_maf_queue(mshr_queue_t* queue);
 
 #endif

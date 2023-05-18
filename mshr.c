@@ -55,17 +55,17 @@ mshr_t* init_mshr(int entires, int inst_num){
  * @param type is the operation type of the instruction - 0 for load, 1 for store, 2 for instruction read (not used).
  * @return -1 if the MAF is full, 0 if the MSHR is full, 1 if the request is not in MSHR, 2 if the request is in MSHR and MAF is not full.
  */
-int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination){
+int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination, int tag){
   if(queue->enable_mshr){
     int empty_entry = -1;
     for(int i =0 ;i<queue->entries;i++){
       if(queue->mshr[i].valid && queue->mshr[i].block_addr == block_addr){
         // This entry is already exist
-        printf("Bank %d MSHR %d is already exist\n",queue->bank_num, i);
+        // printf("Bank %d MSHR %d is already exist\n",queue->bank_num, i);
         for(int j = 0; j<queue->mshr[i].maf_size;j++){
           if(!queue->mshr[i].maf[j].valid){
             // MAF is not full
-            printf("Bank %d MAF %d is not full, new MAF entry is added\n",queue->bank_num, j);
+            // printf("Bank %d MAF %d is not full, new MAF entry is added\n",queue->bank_num, j);
             queue->mshr[i].maf[j].valid = true;
             queue->mshr[i].maf[j].type = type;
             queue->mshr[i].maf_used_num++;
@@ -75,7 +75,7 @@ int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, uns
           }
         }
         // If MAF is full, return -1 (to stall the pipeline)
-        printf("MAF is full, stall the pipeline\n");
+        // printf("MAF is full, stall the pipeline\n");
         return -1;
       }
     }
@@ -98,6 +98,7 @@ int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, uns
       queue->mshr[empty_entry].maf[0].valid = true;
       queue->mshr[empty_entry].maf[0].type = type;
       queue->mshr[empty_entry].maf_used_num++;
+      queue->tag = tag;
       // queue->mshr[empty_entry].maf[0].block_offsset = block_offset;
       // queue->mshr[empty_entry].maf[0].destination = destination;
       return 1;
@@ -115,7 +116,7 @@ int mshr_queue_check_isssue(mshr_queue_t* queue){
     // printf("-- Bank %d MSHR %d is valid: %d, is issued: %d\n",queue->bank_num, i, queue->mshr[i].valid, queue->mshr[i].issued);
     if(queue->mshr[i].valid && !queue->mshr[i].issued){
       queue->mshr[i].issued = true;
-      printf("Bank %d MSHR %d issued.\n",queue->bank_num, i);
+      // printf("Bank %d MSHR %d issued. tag = %x\n",queue->bank_num, i, queue->tag);
       return i;
     }
   }
@@ -126,7 +127,7 @@ void mshr_queue_check_data_returned(mshr_queue_t* queue){
   for(int i =0 ;i<queue->entries;i++){
     if(queue->mshr[i].valid && queue->mshr[i].issued){
       if(queue->mshr[i].counter == MISS_CYCLE){
-        printf("Bank %d MSHR %d data returned.\n",queue->bank_num, i);
+        // printf("Bank %d MSHR %d data returned.\n",queue->bank_num, i);
         queue->mshr[i].counter = 0;
         queue->mshr[i].data_returned = true;
       }
@@ -157,12 +158,16 @@ void mshr_queue_counter_add(mshr_queue_t* queue){
 }
 
 int mshr_queue_clear_inst(mshr_queue_t* queue, int entries){
+  // printf("maf used num = %d\n",queue->mshr[entries].maf_used_num);
+  for(int i = 0; i<queue->mshr[entries].maf_size;i++){
+    // printf("Bank %d MSHR %d MAF Queue %d = %d\n",queue->bank_num,entries,i,queue->mshr[entries].maf[i].valid);
+  }
   if(queue->mshr[entries].valid && queue->mshr[entries].data_returned){
     for(int j = 0; j<queue->mshr[entries].maf_size;j++){
       if(queue->mshr[entries].maf[j].valid){
         // keep looping to clear maf inst
         queue->mshr[entries].maf[j].valid = false;
-        printf("Clearing Bank %d MAF Queue %d\n",queue->bank_num,j);
+        // printf("Clearing Bank %d MSHR %d MAF Queue %d\n",queue->bank_num,entries,j);
         queue->mshr[entries].maf_used_num--;
         if(queue->mshr[entries].maf_used_num==0){
           queue->mshr[entries].valid = false;

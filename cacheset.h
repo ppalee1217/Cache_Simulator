@@ -12,8 +12,8 @@
 
 // Configurable parameters
 #define MISS_CYCLE 10
-#define MSHR_ENTRY 0
-#define MAF_ENTRY 1
+#define MSHR_ENTRY 6
+#define MAF_ENTRY 4
 
 #include "lrustack.h"
 #include "mshr.h"
@@ -76,9 +76,13 @@ typedef struct cache_bank_t
 	int stall_counter;
 	int inst_type;
 	// ! For statistics per bank
-	int hit_num;
-	int miss_num;
-	int writeback_num;
+	counter_t access_num;
+	counter_t hit_num;
+	counter_t miss_num;
+	counter_t writeback_num;
+	counter_t stall_MSHR_num;
+	counter_t MSHR_used_times;
+	counter_t MAF_used_times;
 } cache_bank_t;
 
 /**

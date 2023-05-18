@@ -25,7 +25,7 @@ int simple_log_2(int x) {
 }
 
 int block_size;         // Block size
-int cache_set_size;         // Cache size
+int cache_set_size;     // Cache size
 int ways;               // Ways
 int num_sets;           // Number of sets
 int num_offset_bits;    // Number of offset bits
@@ -53,6 +53,14 @@ cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
     // num_index_bits: the index of desired cache set
     // this variable stands for bits number(size) in addr_t
     num_index_bits = simple_log_2(num_sets);
+    unsigned int offset = 0;
+    unsigned int index = 0;
+    for(int i=0;i<num_offset_bits;i++){
+        offset = (offset << 1) + 1;
+    }
+    for(int i=0;i<num_index_bits;i++){
+        index = (index << 1) + 1;
+    }
     // printf("num_sets: %d\n",num_sets);
     // printf("num_offset_bits: %d\n",num_offset_bits);
     // printf("num_index_bits: %d\n",num_index_bits);
@@ -61,7 +69,7 @@ cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
     // printf("[1:0]: Byte offset\n");
     // printf("[%d:2]: Block offset\n",num_offset_bits + 1);
     // printf("[%d:%d]: Cache index\n",num_offset_bits + num_index_bits + 1,num_offset_bits + 2);
-    // printf("[64:%d]: Tag\n",num_offset_bits + num_index_bits + 2);
+    // printf("[31:%d]: Tag\n",num_offset_bits + num_index_bits + 2);
     // Initializing cache
     cache_set_t* cache_set = (cache_set_t*) malloc(num_sets * sizeof(cache_set_t));
     for(int i=0;i<num_sets;i++){
@@ -93,12 +101,12 @@ cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
  * @return maf result.
  */
 int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t physical_addr, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks) {
-    // addr_t is a 64-bit unsigned integer.
+    // addr_t is a 32-bit unsigned integer.
     // Encoding:
     // [1:0]                                      : Byte offset
-    // [num_offset_bits + 1: 2]                   : Data to fetch in cache block(if cache block size > 32)
+    // [num_offset_bits + 1: 2]                   : Data to fetch in cache block(if cache block size > 1 word)
     // [num_offset_bits + num_index_bits + 1: num_offset_bits + 2] : Cache set index
-    // [64: num_offset_bits + num_index_bits + 2] : Tag
+    // [31: num_offset_bits + num_index_bits + 2] : Tag
 
     // 1.
     // Read access type:
@@ -125,7 +133,7 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
 
     unsigned int offset = 0;
     unsigned int index = 0;
-    unsigned int tag = 0;
+    int tag = 0;
     for(int i=0;i<num_offset_bits;i++){
         offset = (offset << 1) + 1;
     }
@@ -153,12 +161,17 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
     // getchar();
     bool hit;
     int hit_index = 0;
+    // printf("Search tag = %x\n",tag);
+    for(int i=0;i<ways;i++){
+        // printf("Bank %d Cache[%d] Way[%d] = %x, valid = %d, Priority = %d\n",choose, index,i,cache_set[index].blocks[i].tag,cache_set[index].blocks[i].valid, cache_set[index].stack->priority[i]);
+    }
     for(int i=0;i<ways;i++){
         hit = false;
         if(cache_set[index].blocks[i].tag == tag && cache_set[index].blocks[i].valid){
             hit = true;
             hit_index = i;
             printf("Hit! tag: %x is inside cache bank %d set %d block %d\n",tag,choose,index,i);
+            // getchar();
             break;
         }
     }
@@ -167,7 +180,7 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         *hits = *hits + 1;
         // Read: consider block index
         cache->cache_bank[choose].hit_num++;
-        printf("- Choose bank = %d\n",choose);
+        printf("Bank %d hits = %lld\n",choose,cache->cache_bank[choose].hit_num);
         // getchar();
         // Write: need to update dirty bit also
         if(access_type == MEMWRITE)
@@ -183,8 +196,9 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         // miss
         *misses = *misses + 1;
         cache->cache_bank[choose].miss_num++;
+        printf("Bank %d misses = %lld\n",choose,cache->cache_bank[choose].miss_num);
         if(cache->cache_bank[choose].mshr_queue->enable_mshr){
-            return(mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination));
+            return(mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination, tag));
         }
         else{
             return 0;
@@ -193,7 +207,7 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
 }
 
 void cacheset_load_MSHR_data(int set_num, int choose, cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced){
-    printf("-> Addr: %llx Type: %d\n",physical_addr,access_type);
+    // printf("-> Addr: %llx Type: %d\n",physical_addr,access_type);
     bool replace_block;
     unsigned int offset = 0;
     unsigned int index = 0;
@@ -207,11 +221,15 @@ void cacheset_load_MSHR_data(int set_num, int choose, cache_set_t* cache_set, ad
     offset = ((physical_addr >> 2) & offset);
     index = ((physical_addr >> (num_offset_bits+2)) & index);
     tag = (physical_addr >> (num_index_bits + num_offset_bits + 2));
-    if(choose != 0){
-        printf("Cache bank %d get returned data.\n",choose);
-        printf("index (before) = %d\n",index);
-        printf("index (after) = %d\n",index - (set_num * choose - 1));
-        getchar();
+    // printf("-> Return Index = %x\n",index);
+    // printf("-> Return tag = %x\n",tag);
+    //! Check if tag is already inside cache
+    for(int i=0;i<ways;i++){
+        // printf("Bank %d Cache[%d] Block[%d] = %x, valid = %d, Priority = %d\n",choose, index,i,cache_set[index].blocks[i].tag,cache_set[index].blocks[i].valid, cache_set[index].stack->priority[i]);
+        if(cache_set[index].blocks[i].tag == tag && cache_set[index].blocks[i].valid){
+            // printf("-> Tag is already inside cache\n");
+            return;
+        }
     }
     for(int i=0;i<ways;i++){
         replace_block = true;
@@ -232,9 +250,9 @@ void cacheset_load_MSHR_data(int set_num, int choose, cache_set_t* cache_set, ad
         // Cache is full
         int lru_index = lru_stack_get_lru(cache_set[index].stack);
         // Check if replacing block is dirty
-            //printf("Full! block %d is replacing\n",lru_index);
+        // printf("Full! way %d is replacing\n",lru_index);
+        // getchar();
         if(cache_set[index].blocks[lru_index].dirty){
-            // ! Not consider writeback cycles yet
             *writebacks = *writebacks + 1;
         }
         else{
@@ -250,6 +268,9 @@ void cacheset_load_MSHR_data(int set_num, int choose, cache_set_t* cache_set, ad
         // Update LRU
         lru_stack_set_mru(cache_set[index].stack, lru_index);
     }
+    // for(int i=0;i<ways;i++){
+    //     printf("After: Bank %d Cache[%d] Block[%d] = %x, valid = %d, Priority = %d\n",choose, index,i,cache_set[index].blocks[i].tag,cache_set[index].blocks[i].valid, cache_set[index].stack->priority[i]);
+    // }
 }
 /**
  * Function to free up any dynamically allocated memory.
