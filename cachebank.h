@@ -17,7 +17,7 @@ void cache_print_stats(void);
 void load_request(request_queue_t *request_queue, addr_t addr, int type);
 bool req_queue_full(request_queue_t *request_queue);
 bool req_queue_empty(request_queue_t *request_queue);
-void req_send_to_set(request_queue_t *request_queue, cache_bank_t *cache_bank, int choose);
+void req_send_to_set(cache_t* cache, request_queue_t *request_queue, cache_bank_t *cache_bank, int choose);
 void req_queue_forward(request_queue_t *request_queue);
 
 #endif

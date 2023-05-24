@@ -100,7 +100,7 @@ cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
  * @param destination is the PE index that requested the access.
  * @return maf result.
  */
-int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t physical_addr, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks) {
+int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t physical_addr, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks, int mode) {
     // addr_t is a 32-bit unsigned integer.
     // Encoding:
     // [1:0]                                      : Byte offset
@@ -142,6 +142,14 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
     }
     offset = ((physical_addr >> 2) & offset);
     index = ((physical_addr >> (num_offset_bits+2)) & index);
+    //* Setting the index when address mapping mode = 0 
+    if(mode == 0){
+        // printf("(Before) Index = %d\n",index);
+        index /= cache->bank_size;
+        // printf("(After) Index = %d\n",index);
+        // printf("Bank = %d\n",choose);
+        // getchar();
+    }
     tag = (physical_addr >> (num_index_bits + num_offset_bits + 2));
     // printf("address = %llx\n",physical_addr);
     // printf("offset = %x\n",offset);
@@ -172,6 +180,21 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
             hit_index = i;
             printf("Hit! tag: %x is inside cache bank %d set %d block %d\n",tag,choose,index,i);
             // getchar();
+            //* One scenario is that this cache line is sent back recently, and its MAF queue might not be cleared yet
+            //* In this case, the request needs to send to MAF queue
+            if(cache->cache_bank[choose].mshr_queue->enable_mshr){
+                int mshr_index = mshr_queue_check_exist(cache->cache_bank[choose].mshr_queue, physical_addr);
+                if(mshr_index != -1){
+                    printf("But this cache line is sent back recently, and its MAF queue is not cleared yet\n");
+                    printf("So the request needs to send to MAF queue, but it still counted as a miss\n");
+                    *misses = *misses + 1;
+                    printf("misses = %d\n",*misses);
+                    cache->cache_bank[choose].miss_num++;
+                    int maf_index = log_maf_queue(mshr_index, cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination, tag);
+                    printf("Bank %d MSHR %d MAF %d is added\n",choose,mshr_index,maf_index);
+                    return 2;
+                }
+            }
             break;
         }
     }
@@ -192,21 +215,30 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         return 3;
     }
     else{
-        printf("Miss! tag: %x is not inside cache\n",tag);
-        // miss
-        *misses = *misses + 1;
-        cache->cache_bank[choose].miss_num++;
-        printf("Bank %d misses = %lld\n",choose,cache->cache_bank[choose].miss_num);
         if(cache->cache_bank[choose].mshr_queue->enable_mshr){
-            return(mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination, tag));
+            int mshr_status = mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination, tag);
+            if (!(mshr_status == 0 || mshr_status == -1)){
+                // miss
+                printf("Miss! tag: %x is not inside cache\n",tag);
+                *misses = *misses + 1;
+                printf("misses = %d\n",*misses);
+                cache->cache_bank[choose].miss_num++;
+                printf("Bank %d misses = %lld\n",choose,cache->cache_bank[choose].miss_num);
+            }
+            return mshr_status;
         }
         else{
+            // miss
+            printf("Miss! tag: %x is not inside cache\n",tag);
+            *misses = *misses + 1;
+            cache->cache_bank[choose].miss_num++;
+            printf("Bank %d misses = %lld\n",choose,cache->cache_bank[choose].miss_num);
             return 0;
         }
     }
 }
 
-void cacheset_load_MSHR_data(int set_num, int choose, cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced){
+void cacheset_load_MSHR_data(int set_num, int choose, cache_t* cache,cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced, int mode){
     // printf("-> Addr: %llx Type: %d\n",physical_addr,access_type);
     bool replace_block;
     unsigned int offset = 0;
@@ -221,6 +253,14 @@ void cacheset_load_MSHR_data(int set_num, int choose, cache_set_t* cache_set, ad
     offset = ((physical_addr >> 2) & offset);
     index = ((physical_addr >> (num_offset_bits+2)) & index);
     tag = (physical_addr >> (num_index_bits + num_offset_bits + 2));
+    //* Setting the index when address mapping mode = 0 
+    if(mode == 0){
+        // printf("(Before) Index = %d\n",index);
+        index /= cache->bank_size;
+        // printf("(After) Index = %d\n",index);
+        // printf("Bank = %d\n",choose);
+        // getchar();
+    }
     // printf("-> Return Index = %x\n",index);
     // printf("-> Return tag = %x\n",tag);
     //! Check if tag is already inside cache
@@ -254,6 +294,7 @@ void cacheset_load_MSHR_data(int set_num, int choose, cache_set_t* cache_set, ad
         // getchar();
         if(cache_set[index].blocks[lru_index].dirty){
             *writebacks = *writebacks + 1;
+            cache->cache_bank[choose].writeback_num++;
         }
         else{
             *non_dirty_replaced = *non_dirty_replaced + 1;

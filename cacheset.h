@@ -96,8 +96,8 @@ typedef struct cache_t
 } cache_t;
 
 cache_set_t* cacheset_init(int block_size, int cache_size, int ways);
-int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose, addr_t physical_add, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks);
+int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose, addr_t physical_add, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks, int mode);
 void cacheset_cleanup(cache_set_t* cache_set);
-void cacheset_load_MSHR_data(int set_num, int choose, cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced);
+void cacheset_load_MSHR_data(int set_num, int choose, cache_t* cache, cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced, int mode);
 int simple_log_2(int x);
 #endif

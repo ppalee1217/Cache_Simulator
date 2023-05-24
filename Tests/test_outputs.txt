@@ -6,13 +6,19 @@ gcc lrustack.h lrustack.c mshr.h mshr.c cacheset.h cacheset.c cachebank.h cacheb
 access, hits, misses, writebacks
 
 (0) Bank test
-./cachesim Traces/trace.bank_test.txt 32 65536 8
-./cachesim Traces/trace.bank_test2.txt 32 65536 8
-./cachesim Traces/trace.random.txt 32 65536 8
+./cachesim Traces/trend_trace/trace.bank_test.txt 32 65536 8
+./cachesim Traces/trend_trace/trace.bank_test2.txt 32 65536 8
+./cachesim Traces/trend_trace/trace.random.txt 32 65536 8
+
+(0) Simple test
+./cachesim Traces/simple_trace/simple_cycle_test1.trace.txt 32 65536 8
+./cachesim Traces/simple_trace/simple_cycle_test2.trace.txt 32 65536 8
+./cachesim Traces/simple_trace/simple_cycle_test3.trace.txt 32 65536 8
+./cachesim Traces/simple_trace/simple_cycle_test4.trace.txt 32 65536 8
 
 (1) Merge
 
-./cachesim Traces/trace.merge.txt 32 65536 8
+./cachesim Traces/debug_trace/trace.merge.txt 32 65536 8
 1048575, 1038446, 10129, 3058
 
 ./cachesim Traces/trace.merge.txt 32 65536 4
