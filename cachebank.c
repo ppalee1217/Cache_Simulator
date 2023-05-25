@@ -241,7 +241,7 @@ int next_line(FILE* trace) {
       index_mask = (index_mask << 1) + 1;
     }
     cache_set_index = ((address >> (cache_num_offset_bits+2)) & index_mask);
-    // printf("Index = %lld\n", cache_set_index);
+    printf("Index = %lld\n", cache_set_index);
     // printf("cache num bits = %x\n",cache_num_offset_bits);
     // printf("cache index bits = %x\n",cache_num_index_bits);
     // printf("Cache num sets = %d\n",cache_num_sets*cache_ways);
@@ -392,24 +392,40 @@ int main(int argc, char **argv) {
     }
     // * MSHR enabled => need to check if MSHR is cleared(stalled) & request queue is cleared
     if(cache->cache_bank[0].mshr_queue->enable_mshr){
-      bool MSHR_clear = false;
-      bool MSHR_not_clear;
+      bool MSHR_not_clear = false;
       bool req_queue_not_clear = false;
+      //! First check after input instruction is done
+      //* (First) Check if request queue is clear
       for(int j =0;j<cache->bank_size;j++){
         if(!req_queue_empty(cache->cache_bank[j].request_queue)){
           req_queue_not_clear = true;
           break;
         }
       }
-      while(!MSHR_clear || req_queue_not_clear){
+      //* (First) Check if MSHR queue is clear
+      for(int j = 0;j<cache->bank_size;j++){
+        for(int i=0;i<cache->cache_bank[j].mshr_queue->entries;i++){
+          if(cache->cache_bank[j].mshr_queue->mshr[i].valid)
+            MSHR_not_clear = true;
+        }
+      }
+      //* Loop through until MSHR and request queue is clear
+      while(MSHR_not_clear || req_queue_not_clear){
+        //* Update cycle number
+        cycles++;
+        printf("- Cycles: %lld\n",cycles);
         MSHR_not_clear = false;
         req_queue_not_clear = false;
+        //* Update MSHR queue status
+        for(int j = 0;j<cache->bank_size; j++){
+          mshr_queue_check_isssue(cache->cache_bank[j].mshr_queue);
+          mshr_queue_counter_add(cache->cache_bank[j].mshr_queue);
+          mshr_queue_check_data_returned(cache->cache_bank[j].mshr_queue);
+        }
         //* Check MSHR queue status
         for(int j = 0;j<cache->bank_size;j++){
           for(int i=0;i<cache->cache_bank[j].mshr_queue->entries;i++){
-            if(cache->cache_bank[j].mshr_queue->mshr[i].valid)
-              MSHR_not_clear = true;
-            // Clear the MSHR
+            //* Clear the MSHR
             if(cache->cache_bank[j].mshr_queue->mshr[i].valid && cache->cache_bank[j].mshr_queue->mshr[i].data_returned){
               printf("Clearing instruction of Bank %d MSHR Queue %d\n",j,i);
               // ! Check if return addr is satlling the cache bank
@@ -427,36 +443,27 @@ int main(int argc, char **argv) {
                   cache->cache_bank[j].stall = false;
                 }
               }
-              // Load returned data to cache set
+              //* Handle the data returned MSHR queue inst.
               cacheset_load_MSHR_data(cache->cache_bank[j].set_num, j, cache, cache->cache_bank[j].cache_set, cache->cache_bank[j].mshr_queue->mshr[i].block_addr, mshr_queue_clear_inst(cache->cache_bank[j].mshr_queue,i), &writebacks, &non_dirty_replaced, ADDRESSING_MODE);
             }
           }
-          // If request queue is not empty, send request to cache bank
-          if(!req_queue_empty(cache->cache_bank[j].request_queue)){
+          //* If request queue is not empty, send request to cache bank
+          if(!req_queue_empty(cache->cache_bank[j].request_queue))
             req_send_to_set(cache, cache->cache_bank[j].request_queue, cache->cache_bank, j);
-          }
         }
-        //* Update request queue status
+        //* Check if MSHR queue not clear yet
+        for(int j = 0;j<cache->bank_size;j++)
+          for(int i=0;i<cache->cache_bank[j].mshr_queue->entries;i++)
+            if(cache->cache_bank[j].mshr_queue->mshr[i].valid)
+              MSHR_not_clear = true;
+        //* Check if Request queue not clear yet
         for(int j =0;j<cache->bank_size;j++){
           if(!req_queue_empty(cache->cache_bank[j].request_queue)){
             req_queue_not_clear = true;
             break;
           }
         }
-        //* If MSHR is not clear, add cycle and check if data returned
-        if(MSHR_not_clear){
-          cycles++;
-          printf("- Cycles: %lld\n",cycles);
-          MSHR_clear = false;
-          for(int j = 0;j<cache->bank_size; j++){
-            mshr_queue_check_isssue(cache->cache_bank[j].mshr_queue);
-            mshr_queue_counter_add(cache->cache_bank[j].mshr_queue);
-            mshr_queue_check_data_returned(cache->cache_bank[j].mshr_queue);
-          }
-        }
-        else
-          MSHR_clear = true;
-       printf("=====================\n");
+        printf("=====================\n");
       }
     }
     // * MSHR is not enabled, check if request queue is cleared & (cache bank is stalled)
@@ -523,7 +530,6 @@ int main(int argc, char **argv) {
  * Function to printf cache statistics.
  */
 void cache_print_stats() {
-  printf("================\n");
   printf("With %d cache_ways associativity, %d sets, and %d bytes per cache set:\n", cache_ways, cache_num_sets, cache_block_size);
   printf("Cycles          : %llu\n", cycles);
   printf("Accesses        : %llu\n", accesses);

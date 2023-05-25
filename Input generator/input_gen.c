@@ -11,7 +11,7 @@ int main() {
     printf("Error opening txt file\n");
     exit(1);
   }
-  generate_mapping0(f, 4, 12, 256);
+  generate_mapping0(f, 4, 48, 256, true);
   fclose(f);
   return 0;
 }
@@ -27,7 +27,9 @@ void generate_random_test(FILE *f, int test_num){
   }
 }
 
-void generate_mapping0(FILE * f, int bank_num, int test_num, int set_num) {
+void generate_mapping0(FILE * f, int bank_num, int test_num, int set_num, bool same_index) {
+  unsigned int same_index_num = 0;
+  bool same_index_flag = same_index;
   time_t t;
   srand((unsigned int) time(&t));
   unsigned int temp;
@@ -37,25 +39,48 @@ void generate_mapping0(FILE * f, int bank_num, int test_num, int set_num) {
     index_mask = (index_mask << 1) + 1;
   }
   for(int i=0; i<test_num; i++){
-    unsigned int x = rand();
-    int index = (x >> (int)(log2(set_num) + 2)) & index_mask;
-    while((index - choose_bank) % bank_num != 0){
-      x = rand();
-      index = (x >> (int)(log2(set_num) + 2)) & index_mask;
-    }
-    printf("i = %d\n",i);
-    printf("index: %d\n",index);
-    printf("choose_bank: %d\n",choose_bank);
     if(i >= (test_num/bank_num)*(choose_bank+1)){
       choose_bank++;
       printf("test_num: %d\n",i);
       printf("Choose bank %d\n",choose_bank);
+      same_index_flag = true;
     }
+    unsigned int x = rand();
+    unsigned int index = (x >> 5) & index_mask;
+    while(((index - choose_bank) % bank_num != 0) || (index != same_index_num && same_index)){
+      x = rand();
+      index = (x >> 5) & index_mask;
+      if(same_index && same_index_flag){
+        if((index - choose_bank) % bank_num == 0){
+          same_index_num = index;
+          same_index_flag = false;
+        } 
+      }
+      if(same_index){
+        unsigned int temp2 = (x >> (int)(5 + log2(set_num)));
+        temp2 <<= (int)log2(set_num);
+        temp2 += same_index_num;
+        temp2 <<= 5;
+        temp2 += (unsigned int)(0b11111 & x);
+        x = temp2;
+        index = (x >> 5) & index_mask;
+      }
+    }
+    if(same_index && same_index_flag){
+      if((index - choose_bank) % bank_num == 0){
+        same_index_num = index;
+        same_index_flag = false;
+      } 
+    }
+    printf("i = %d\n",i);
+    printf("x = %x\n",x);
+    printf("index: %d\n",index);
+    // printf("choose_bank: %d\n",choose_bank);
     fprintf(f,"1 %08x 0\n",x);
   }
 }
 
-void generate_mapping1(FILE * f, int bank_num, int test_num, int set_num) {
+void generate_mapping1(FILE * f, int bank_num, int test_num, int set_num, bool same_index) {
   time_t t;
   srand((unsigned int) time(&t));
   unsigned int temp;

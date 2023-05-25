@@ -2,13 +2,10 @@
 #define __CACHEBANK_H
 
 #include "cacheset.h"
+#include "config.h"
 #include <stdbool.h>
 #include <stdio.h>
 
-// Configurable parameters
-#define BANK_SIZE 4
-#define REQ_QUEUE_SIZE 4
-#define ADDRESSING_MODE 0
 
 cache_bank_t *cachebank_init(int _bank_size);
 request_queue_t *req_queue_init(int _queue_size);

@@ -1,7 +1,7 @@
 Sample Commands and Expected Outputs
 
 Compile with:
-gcc lrustack.h lrustack.c mshr.h mshr.c cacheset.h cacheset.c cachebank.h cachebank.c -o cachesim
+gcc config.h lrustack.h lrustack.c mshr.h mshr.c cacheset.h cacheset.c cachebank.h cachebank.c -o cachesim
 
 access, hits, misses, writebacks
 
@@ -15,6 +15,11 @@ access, hits, misses, writebacks
 ./cachesim Traces/simple_trace/simple_cycle_test2.trace.txt 32 65536 8
 ./cachesim Traces/simple_trace/simple_cycle_test3.trace.txt 32 65536 8
 ./cachesim Traces/simple_trace/simple_cycle_test4.trace.txt 32 65536 8
+./cachesim Traces/simple_trace/simple_MSHR_stall_test.trace.txt 32 65536 8
+./cachesim Traces/simple_trace/simple_MSHR_used_test.trace.txt 32 65536 8
+./cachesim Traces/simple_trace/simple_MAF_used_test.trace.txt 32 65536 8
+./cachesim Traces/simple_trace/simple_writebacks_test.trace.txt 32 65536 8
+./cachesim Traces/simple_trace/simple_non_dirty_test.trace.txt 32 65536 8
 
 (1) Merge
 

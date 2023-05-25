@@ -2,8 +2,7 @@
 #define _MSHR_H_
 
 #include <stdbool.h>
-
-#define MISS_CYCLE 10
+#include "config.h"
 
 typedef unsigned long long addr_t;
 

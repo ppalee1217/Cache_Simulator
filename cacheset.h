@@ -10,13 +10,9 @@
 #define MEMWRITE 1
 #define IFETCH 2
 
-// Configurable parameters
-#define MISS_CYCLE 10
-#define MSHR_ENTRY 6
-#define MAF_ENTRY 4
-
 #include "lrustack.h"
 #include "mshr.h"
+#include "config.h"
 #include <stdbool.h>
 
 // Please DO NOT CHANGE the following two typedefs
