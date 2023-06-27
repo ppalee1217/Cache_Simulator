@@ -5,12 +5,18 @@ gcc config.h lrustack.h lrustack.c mshr.h mshr.c cacheset.h cacheset.c cachebank
 
 access, hits, misses, writebacks
 
+(0) Trend test
+./cachesim Traces/trend_trace/trace.loop.txt 32 65536 8
+./cachesim Traces/trend_trace/trace.forward.txt 32 65536 8
+./cachesim Traces/trend_trace/trace.random.txt 32 65536 8
+./cachesim Traces/trend_trace/trace.susume2.txt 32 65536 8
+
 (0) Bank test
 ./cachesim Traces/trend_trace/trace.bank_test.txt 32 65536 8
 ./cachesim Traces/trend_trace/trace.bank_test2.txt 32 65536 8
-./cachesim Traces/trend_trace/trace.random.txt 32 65536 8
 
 (0) Simple test
+./cachesim Traces/simple_trace/simple_MAF_test.trace.txt 32 65536 8
 ./cachesim Traces/simple_trace/simple_cycle_test1.trace.txt 32 65536 8
 ./cachesim Traces/simple_trace/simple_cycle_test2.trace.txt 32 65536 8
 ./cachesim Traces/simple_trace/simple_cycle_test3.trace.txt 32 65536 8

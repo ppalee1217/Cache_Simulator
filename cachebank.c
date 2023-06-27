@@ -16,6 +16,7 @@ counter_t stall_MSHR = 0;         // Total number of stalls due to MSHR
 counter_t stall_RequestQueue = 0; // Total number of stalls due to Request Queue
 counter_t MSHR_used_times = 0;    // Total number of MSHR used times
 counter_t MAF_used_times = 0;     // Total number of MAF used times
+bool enable = false;              // Enable debug mode
 
 cache_t* cache;         // Data structure for the cache
 int cache_block_size;         // Block size
@@ -25,11 +26,14 @@ int cache_num_sets;           // Number of sets
 int cache_num_offset_bits;    // Number of block bits
 int cache_num_index_bits;     // Number of cache_set_index bits
 unsigned long long file_pointer_temp; // Temp file pointer for trace file
+int req_number_on_trace = 0;
 
 request_queue_t* req_queue_init(int _queue_size){
   request_queue_t* request_queue = (request_queue_t*) malloc(sizeof(request_queue_t));
   request_queue->request_addr = (addr_t*) malloc(_queue_size*sizeof(addr_t));
+  request_queue->tag = (unsigned int*) malloc(_queue_size*sizeof(unsigned int));
   request_queue->request_type = (int*) malloc(_queue_size*sizeof(int));
+  request_queue->req_number_on_trace = (int*) malloc(_queue_size*sizeof(int));
   request_queue->queue_size = _queue_size;
   return request_queue;
 }
@@ -72,15 +76,17 @@ void cache_init(int _bank_size, int _block_size, int _cache_size, int _ways) {
   cache_num_index_bits = simple_log_2(cache_num_sets);
 }
 
-void load_request(request_queue_t* request_queue, addr_t addr, int type){
+void load_request(request_queue_t* request_queue, addr_t addr, unsigned int tag, int type){
   request_queue->request_addr[request_queue->req_num] = addr;
+  request_queue->tag[request_queue->req_num] = tag;
   request_queue->request_type[request_queue->req_num] = type;
+  request_queue->req_number_on_trace[request_queue->req_num] = req_number_on_trace;
   request_queue->req_num++;
 }
 
 bool req_queue_full(request_queue_t* request_queue){
   if(request_queue->req_num == request_queue->queue_size){
-    printf("Request queue is full\n");
+    // printf("Request queue is full\n");
     return true;
   }
   else{
@@ -98,20 +104,32 @@ bool req_queue_empty(request_queue_t* request_queue){
 }
 
 void req_queue_forward(request_queue_t* request_queue){
-  printf("Request queue forwarding...\n");
+  // printf("Request queue forwarding...\n");
   for(int i=0;i<request_queue->req_num-1;i++){
     request_queue->request_addr[i] = request_queue->request_addr[i+1];
+    request_queue->tag[i] = request_queue->tag[i+1];
     request_queue->request_type[i] = request_queue->request_type[i+1];
+    request_queue->req_number_on_trace[i] = request_queue->req_number_on_trace[i+1];
   }
+  request_queue->request_addr[request_queue->req_num-1] = 0;
+  request_queue->tag[request_queue->req_num-1] = 0;
+  request_queue->request_type[request_queue->req_num-1] = 0;
+  request_queue->req_number_on_trace[request_queue->req_num-1] = 0;
   request_queue->req_num = request_queue->req_num - 1;
 }
 
-void req_send_to_set(cache_t* cache,request_queue_t* request_queue, cache_bank_t* cache_bank, int choose){
-  // Check if this cache bank is stalling for MSHR Queue
-  // if true, update the MSHR & MAF info
-  // else, send the request to cache set
-  printf("Bank %d Request queue num = %d\n",choose,request_queue->req_num);
+void req_send_to_set(FILE* wb, cache_t* cache,request_queue_t* request_queue, cache_bank_t* cache_bank, int choose){
+  //* Check if this cache bank is stalling for MSHR Queue
+  //* if true, update the MSHR & MAF info
+  //* else, send the request to cache set
+  // printf("=--------------------------------=\n");
+  // printf("Bank %d Request queue num = %d\n",choose,request_queue->req_num);
+  // for(int i=0;i<request_queue->queue_size;i++){
+  //   printf("Bank %d request queue %d addr = %p, tag = %p\n",choose,i,request_queue->request_addr[i],request_queue->tag[i]);
+  // }
+  // printf("=--------------------------------=\n");
   if(cache_bank[choose].stall){
+    fprintf(wb,"Cache bank %d is stalled\n",choose);
     // ! Check stall status of non-MSHR design 
     if(!cache_bank[choose].mshr_queue->enable_mshr){
       cache_bank[choose].stall_counter++;
@@ -121,23 +139,28 @@ void req_send_to_set(cache_t* cache,request_queue_t* request_queue, cache_bank_t
       if(cache_bank[choose].stall_counter == MISS_CYCLE){
         cache_bank[choose].stall = false;
         cache_bank[choose].stall_counter = 0;
-        cacheset_load_MSHR_data(cache_bank[choose].set_num, choose, cache, cache_bank[choose].cache_set, cache_bank[choose].stall_addr, cache_bank[choose].inst_type, &writebacks, &non_dirty_replaced, ADDRESSING_MODE);
+        cacheset_load_MSHR_data(wb, cache_bank[choose].set_num, choose, cache, cache_bank[choose].cache_set, cache_bank[choose].stall_addr, cache_bank[choose].inst_type, &writebacks, &non_dirty_replaced, ADDRESSING_MODE, 0);
         req_queue_forward(request_queue);
       }
     }
     if(cache_bank[choose].stall_type){
-     // printf("Cache bank %d : waiting for specific data to return...\n",choose);
-     // printf("Cache bank %d is waiting for addr %p to return.\n",choose,cache_bank[choose].stall_addr);
-      for(int i=0;i<cache_bank[choose].mshr_queue->entries;i++){
-       // printf("MSHR Queue %d address is %p => issue: %d, return: %d\n",i,cache_bank[choose].mshr_queue->mshr[i].block_addr,cache_bank[choose].mshr_queue->mshr[i].issued,cache_bank[choose].mshr_queue->mshr[i].data_returned);
-      }
+      // printf("Cache bank %d : waiting for specific data to return...\n",choose);
+      // printf("Cache bank %d is waiting for tag %p to return.\n",choose,cache_bank[choose].stall_tag);
+      // for(int i=0;i<cache_bank[choose].mshr_queue->entries;i++){
+      //  printf("MSHR Queue %d address is %p, tag is %p => issue: %d, return: %d\n",i,cache_bank[choose].mshr_queue->mshr[i].block_addr,cache_bank[choose].mshr_queue->mshr[i].tag,cache_bank[choose].mshr_queue->mshr[i].issued,cache_bank[choose].mshr_queue->mshr[i].data_returned);
+      // }
     }
     else{
-     // printf("Cache bank %d : waiting for any data to return & clear...\n",choose);
+      // printf("Cache bank %d : waiting for any data to return & clear...\n",choose);
     }
     return;
   }
   else{
+    unsigned int index = 0;
+    for(int i=0;i<cache_num_index_bits;i++){
+      index = (index << 1) + 1;
+    }
+    index = ((request_queue->request_addr[0] >> (cache_num_offset_bits+2)) & index);
     // Setting offset
     unsigned int offset = 0;
     for(int i=0;i<cache_num_offset_bits;i++){
@@ -149,33 +172,32 @@ void req_send_to_set(cache_t* cache,request_queue_t* request_queue, cache_bank_t
      // printf("Request queue is empty, No need to send.\n");
     }
     else{
-        printf("Sending request to cache bank %d\n",choose);
-      int maf_result = cacheset_access(cache_bank[choose].cache_set, cache, choose, request_queue->request_addr[0], request_queue->request_type[0], 0, &hits, &misses, &writebacks, ADDRESSING_MODE);
+      // printf("Sending request to cache bank %d\n",choose);
+      int maf_result = cacheset_access(wb, cache_bank[choose].cache_set, cache, choose, request_queue->request_addr[0], request_queue->request_type[0], 0, &hits, &misses, &writebacks, ADDRESSING_MODE, request_queue->req_number_on_trace[0]);
       // Check the MSHR Queue
       if(maf_result == 3){
         // * hit
         
       }
       else if(maf_result == 1){
-        //* printf("This request is not in MSHR Queue, and is logged now\n");
+        // printf("This request is not in MSHR Queue, and is logged now\n");
+        // fprintf(wb, "This request %llx is not in MSHR Queue, and is logged now\n",request_queue->request_addr[0]);
         // request is successfully logged and MAF is not full
         // => check if the request is issued to DRAM, and log MAF (is done by mshr_queue_get_entry)
-        // * log instruction to MAF if the data is returned or not
         MSHR_used_times++;
         cache_bank[choose].MSHR_used_times++;
       }
       else if(maf_result == 2){
-        //* printf("This request is in MSHR Queue, and MAF is not full yet.\n");
+        // printf("This request is in MSHR Queue, and MAF is not full yet.\n");
+        // fprintf(wb, "This request %llx is in MSHR Queue, and MAF is not full yet.\n",request_queue->request_addr[0]);
         // request is successfully logged and MAF is not full
         // => check if the request is issued to DRAM, and log MAF (is done by mshr_queue_get_entry)
-        // * log instruction to MAF if the data is returned or not
         MAF_used_times++;
-        MSHR_used_times++;
-        cache_bank[choose].MSHR_used_times++;
         cache_bank[choose].MAF_used_times++;
       }
       else if(maf_result == -1){
-        //* printf("This request is in MSHR Queue, but MAF is full.\n");
+        // printf("This request is in MSHR Queue, but MAF is full.\n");
+        // fprintf(wb, "This request %llx is in MSHR Queue, but MAF is full. Bank stalled.\n",request_queue->request_addr[0]);
         // request is already in the queue, but MAF is full
         // => check if the request is issued to DRAM, and wait for this request to be done(stall => while loop)
         // * Wait for data to return, and clear 1 instruction so that this new instruction can be logged.
@@ -185,6 +207,7 @@ void req_send_to_set(cache_t* cache,request_queue_t* request_queue, cache_bank_t
         cache_bank[choose].stall = true;
         cache_bank[choose].stall_type = 1;
         cache_bank[choose].stall_addr = request_queue->request_addr[0];
+        cache_bank[choose].stall_tag = request_queue->tag[0];
         if(cache_bank[choose].mshr_queue->enable_mshr){
           stall_MSHR++;
           cache_bank[choose].stall_MSHR_num++;
@@ -192,12 +215,14 @@ void req_send_to_set(cache_t* cache,request_queue_t* request_queue, cache_bank_t
         return;
       }
       else{
-        //* printf("This request is not in MSHR Queue.\n");
+        // printf("This request is not in MSHR Queue.\n");
+        // fprintf(wb, "This request %llx is not in MSHR Queue.  Bank stalled.\n", request_queue->request_addr[0]);
         // * MSHR queue is full, wait for any data to return, and then wait for the MAF queue to be cleared
         cache_bank[choose].stall = true;
         cache_bank[choose].stall_type = 0;
         // * For non-MSHR design
         cache_bank[choose].stall_addr = request_queue->request_addr[0];
+        cache_bank[choose].stall_tag = request_queue->tag[0];
         cache_bank[choose].inst_type = request_queue->request_type[0];
         if(cache_bank[choose].mshr_queue->enable_mshr){
           stall_MSHR++;
@@ -207,6 +232,11 @@ void req_send_to_set(cache_t* cache,request_queue_t* request_queue, cache_bank_t
       }
       // log the info of returned data to cache
       // request is not in the queue
+      for(int j=0;j<request_queue->queue_size;j++){
+        fprintf(wb, "Bank %d Request queue %d: %llx\n",choose,j,request_queue->request_addr[j]);
+      }
+      fprintf(wb, "MAF result = %d\n",maf_result);
+      fprintf(wb,"------------\n");
       // ! Remember to clear the request in the queue
       req_queue_forward(request_queue);
       // printf("Request queue %d num is now %d\n",choose,request_queue->req_num);
@@ -235,13 +265,15 @@ int next_line(FILE* trace) {
     unsigned long long address, instr;
     unsigned int index_mask = 0;
     unsigned int cache_set_index = 0;
+    unsigned int tag = 0;
     fscanf(trace, "%d %llx %llx\n", &t, &address, &instr);
     for(int i=0;i<cache_num_index_bits;i++){
       cache_set_index = (cache_set_index << 1) + 1;
       index_mask = (index_mask << 1) + 1;
     }
     cache_set_index = ((address >> (cache_num_offset_bits+2)) & index_mask);
-    printf("Index = %lld\n", cache_set_index);
+    tag = (address >> (cache_num_offset_bits+2+cache_num_index_bits));
+    // printf("Index = %lld\n", cache_set_index);
     // printf("cache num bits = %x\n",cache_num_offset_bits);
     // printf("cache index bits = %x\n",cache_num_index_bits);
     // printf("Cache num sets = %d\n",cache_num_sets*cache_ways);
@@ -257,15 +289,24 @@ int next_line(FILE* trace) {
         return 2;
       }
       else{
+        req_number_on_trace++;
         cache->cache_bank[choose_bank].access_num++;
-        printf("Bank %d access num = %lld\n",choose_bank,cache->cache_bank[choose_bank].access_num);
-        load_request(cache->cache_bank[choose_bank].request_queue, address, t);
-        printf("Request is load to queue %d\n",choose_bank);
+        // printf("Bank %d access num = %lld\n",choose_bank,cache->cache_bank[choose_bank].access_num);
+        load_request(cache->cache_bank[choose_bank].request_queue, address, tag, t);
+        // printf("Request is load to queue %d\n",choose_bank);
       }
     }
     else if(ADDRESSING_MODE == 1){
       unsigned int address_partition = ((unsigned int)-1) / BANK_SIZE;
       int choose_bank = address / address_partition;
+      // if(address == 0x102471f || enable){
+      //   enable = true;
+      //   printf("Request num = %d\n",cache->cache_bank[choose_bank].request_queue->req_num);
+      //   for(int i = 0;i<cache->cache_bank[choose_bank].request_queue->queue_size;i++){
+      //     printf("Request queue %d: %llx\n",i,cache->cache_bank[choose_bank].request_queue->request_addr[i]);
+      //   }
+      //   getchar();
+      // }
       // printf("Choose bank %d\n",choose_bank);
       if(req_queue_full(cache->cache_bank[choose_bank].request_queue)){
         // printf("request queue %d is full\n",choose_bank);
@@ -274,8 +315,9 @@ int next_line(FILE* trace) {
         return 2;
       }
       else{
+        req_number_on_trace++;
         cache->cache_bank[choose_bank].access_num++;
-        load_request(cache->cache_bank[choose_bank].request_queue, address, t);
+        load_request(cache->cache_bank[choose_bank].request_queue, address, tag, t);
         // printf("request is load to queue %d\n",choose_bank);
       }
     }
@@ -296,7 +338,7 @@ int next_line(FILE* trace) {
  */
 int main(int argc, char **argv) {
     FILE *input;
-
+    FILE *wb = fopen("wb1.txt", "w");
     if (argc != 5) {
         fprintf(stderr, "Usage:\n  %s <trace> <block size(bytes)>"
                         " <cache size(bytes)> <cache_ways>\n", argv[0]);
@@ -308,45 +350,49 @@ int main(int argc, char **argv) {
     int input_status = 1;
     while (input_status != 0){
       cycles++;
-      printf("=======================\n");
-      printf("- Cycles: %lld\n",cycles);
+      // getchar();
+      // printf("=======================\n");
+      // printf("- Cycles: %lld\n",cycles);
       // * Load input to request queue
       for(int i =0;i<cache->bank_size;i++){
         file_pointer_temp = ftell(input);
         // printf("trace pointer = %lld\n",file_pointer_temp);
         input_status = next_line(input);
         if(input_status == 0){
-          // printf("Instruction input complete.\n");
+          printf("Instruction input complete.\n");
           break;
         }
         else if(input_status == 2){
           // printf("The desired request queue is full, need to handle request first.\n");
+          // getchar();
           break;
         }
       }
       if(input_status == 2)
         stall_RequestQueue++;
       // * Check the MSHR & MAF status for each bank
-      printf("---------------------\n");
+      // printf("---------------------\n");
       for(int j=0;j<cache->bank_size;j++){
         // ! Only need to check MSHR status when MSHR enabled
         if(cache->cache_bank[j].mshr_queue->enable_mshr){
           // Update the status of MSHR queue of each bank
           mshr_queue_check_isssue(cache->cache_bank[j].mshr_queue);
+          // printf("Bank %d :\n",j);
           mshr_queue_counter_add(cache->cache_bank[j].mshr_queue);
           mshr_queue_check_data_returned(cache->cache_bank[j].mshr_queue);
           // Check if data in each MSHR entries is returned
           for(int i=0; i<cache->cache_bank[j].mshr_queue->entries;i++){
             if(cache->cache_bank[j].mshr_queue->mshr[i].data_returned && cache->cache_bank[j].mshr_queue->mshr[i].valid){
-              printf("Clearing instruction of Bank %d MSHR Queue %d\n",j,i);
+              // printf("Clearing instruction of Bank %d MSHR Queue %d\n",j,i);
               // ! Check if the return addr is satlling the cache bank
               if(cache->cache_bank[j].stall){
                 if(cache->cache_bank[j].stall_type){
-                  if(cache->cache_bank[j].stall_addr == cache->cache_bank[j].mshr_queue->mshr[i].block_addr){
+                  if(cache->cache_bank[j].stall_tag == cache->cache_bank[j].mshr_queue->mshr[i].tag){
                     // printf("Specific data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
                     cache->cache_bank[j].stall = false;
                     cache->cache_bank[j].stall_type = 0;
                     cache->cache_bank[j].stall_addr = 0;
+                    cache->cache_bank[j].stall_tag = 0;
                   }
                 }
                 else{
@@ -355,18 +401,18 @@ int main(int argc, char **argv) {
                 }
               }
               // Load returned data to cache set
-              cacheset_load_MSHR_data(cache->cache_bank[j].set_num, j, cache, cache->cache_bank[j].cache_set, cache->cache_bank[j].mshr_queue->mshr[i].block_addr, mshr_queue_clear_inst(cache->cache_bank[j].mshr_queue,i), &writebacks, &non_dirty_replaced, ADDRESSING_MODE);
+              cacheset_load_MSHR_data(wb, cache->cache_bank[j].set_num, j, cache, cache->cache_bank[j].cache_set, cache->cache_bank[j].mshr_queue->mshr[i].block_addr, mshr_queue_clear_inst(cache->cache_bank[j].mshr_queue,i), &writebacks, &non_dirty_replaced, ADDRESSING_MODE, cache->cache_bank[j].mshr_queue->mshr[i].maf[0].req_number_on_trace);
             }
           }
         }
         // * When request queue is not empty, send request to cache bank
         if(!req_queue_empty(cache->cache_bank[j].request_queue)){
-          // getchar();
-          req_send_to_set(cache, cache->cache_bank[j].request_queue, cache->cache_bank, j);
+          req_send_to_set(wb, cache, cache->cache_bank[j].request_queue, cache->cache_bank, j);
+          fprintf(wb,"1st _req_send_to_set\n");
         }
         // * Deal with unresolved MAF
       }
-      // // getchar();
+      // getchar();
     }
     // ! Execution not done yet => request queue need to be cleared
     printf("Instruction input complete. Clearing Request Queue & MSHR Queue...\n");
@@ -390,6 +436,7 @@ int main(int argc, char **argv) {
         printf("Bank %d Request Queue is clear\n",j);
       }
     }
+    printf("---------------------\n");
     // * MSHR enabled => need to check if MSHR is cleared(stalled) & request queue is cleared
     if(cache->cache_bank[0].mshr_queue->enable_mshr){
       bool MSHR_not_clear = false;
@@ -413,7 +460,7 @@ int main(int argc, char **argv) {
       while(MSHR_not_clear || req_queue_not_clear){
         //* Update cycle number
         cycles++;
-        printf("- Cycles: %lld\n",cycles);
+        // printf("- Cycles: %lld\n",cycles);
         MSHR_not_clear = false;
         req_queue_not_clear = false;
         //* Update MSHR queue status
@@ -427,29 +474,31 @@ int main(int argc, char **argv) {
           for(int i=0;i<cache->cache_bank[j].mshr_queue->entries;i++){
             //* Clear the MSHR
             if(cache->cache_bank[j].mshr_queue->mshr[i].valid && cache->cache_bank[j].mshr_queue->mshr[i].data_returned){
-              printf("Clearing instruction of Bank %d MSHR Queue %d\n",j,i);
-              // ! Check if return addr is satlling the cache bank
+              // printf("Clearing instruction of Bank %d MSHR Queue %d\n",j,i);
+              // ! Check if the tag of return addr is satlling the cache bank
               if(cache->cache_bank[j].stall){
                 if(cache->cache_bank[j].stall_type){
-                  if(cache->cache_bank[j].stall_addr == cache->cache_bank[j].mshr_queue->mshr[i].block_addr){
-                    printf("Specific data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
+                  if(cache->cache_bank[j].stall_tag == cache->cache_bank[j].mshr_queue->mshr[i].tag){
+                    // printf("Specific data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
                     cache->cache_bank[j].stall = false;
                     cache->cache_bank[j].stall_type = 0;
                     cache->cache_bank[j].stall_addr = 0;
+                    cache->cache_bank[j].stall_tag = 0;
                   }
                 }
                 else{
-                  printf("Any data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
+                  // printf("Any data in cache bank %d MSHR Queue %d is returned, clear stall\n",j,i);
                   cache->cache_bank[j].stall = false;
                 }
               }
               //* Handle the data returned MSHR queue inst.
-              cacheset_load_MSHR_data(cache->cache_bank[j].set_num, j, cache, cache->cache_bank[j].cache_set, cache->cache_bank[j].mshr_queue->mshr[i].block_addr, mshr_queue_clear_inst(cache->cache_bank[j].mshr_queue,i), &writebacks, &non_dirty_replaced, ADDRESSING_MODE);
+              cacheset_load_MSHR_data(wb, cache->cache_bank[j].set_num, j, cache, cache->cache_bank[j].cache_set, cache->cache_bank[j].mshr_queue->mshr[i].block_addr, mshr_queue_clear_inst(cache->cache_bank[j].mshr_queue,i), &writebacks, &non_dirty_replaced, ADDRESSING_MODE,cache->cache_bank[j].mshr_queue->mshr[i].maf[0].req_number_on_trace);
             }
           }
           //* If request queue is not empty, send request to cache bank
           if(!req_queue_empty(cache->cache_bank[j].request_queue))
-            req_send_to_set(cache, cache->cache_bank[j].request_queue, cache->cache_bank, j);
+            req_send_to_set(wb, cache, cache->cache_bank[j].request_queue, cache->cache_bank, j);
+            fprintf(wb,"2nd _req_send_to_set\n");
         }
         //* Check if MSHR queue not clear yet
         for(int j = 0;j<cache->bank_size;j++)
@@ -463,7 +512,7 @@ int main(int argc, char **argv) {
             break;
           }
         }
-        printf("=====================\n");
+        // printf("=====================\n");
       }
     }
     // * MSHR is not enabled, check if request queue is cleared & (cache bank is stalled)
@@ -493,11 +542,11 @@ int main(int argc, char **argv) {
             printf("Bank %d request still got %d requests.\n",j ,cache->cache_bank[j].request_queue->req_num);
             if(cache->cache_bank[j].stall)
               printf("Bank %d is also stalled.\n", j);
-            req_send_to_set(cache, cache->cache_bank[j].request_queue, cache->cache_bank, j);
+            req_send_to_set(wb, cache, cache->cache_bank[j].request_queue, cache->cache_bank, j);
           }
           else if(cache->cache_bank[j].stall){
             printf("Bank %d is now stalled.\n", j);
-            req_send_to_set(cache, cache->cache_bank[j].request_queue, cache->cache_bank, j);
+            req_send_to_set(wb, cache, cache->cache_bank[j].request_queue, cache->cache_bank, j);
           }
         }
         for(int j =0;j<cache->bank_size;j++){
@@ -513,6 +562,7 @@ int main(int argc, char **argv) {
           }
         }
       }
+      printf("---------------------\n");
     }
     cache_print_stats();
     // Cleanup
@@ -523,6 +573,7 @@ int main(int argc, char **argv) {
     free(cache->cache_bank);
     free(cache);
     fclose(input);
+    fclose(wb);
     return 0;
 }
 
@@ -540,9 +591,9 @@ void cache_print_stats() {
   printf("Miss rate       : %.3f%%\n", (double)misses/accesses*100);
   //  printf("Writeback rate  : %.3f%%\n", (double)writebacks/accesses*100);
   printf("MSHR used times : %llu\n", MSHR_used_times);
-  printf("MSHR used rate  : %.3f%%\n", (double)MSHR_used_times/misses*100);
+  printf("MSHR used rate  : %.3f%%\n", (double)MSHR_used_times/accesses*100);
   printf("MAF used times  : %llu\n", MAF_used_times);
-  printf("MAF used rate   : %.3f%%\n", (double)MAF_used_times/MSHR_used_times*100);
+  printf("MAF used rate   : %.3f%%\n", (double)MAF_used_times/accesses*100);
   printf("Stall times due to MSHR          : %llu\n", stall_MSHR);
   printf("Stall times due to Request Queue : %llu\n", stall_RequestQueue);
   printf("Cache replaced num (not dirty)   : %llu\n", non_dirty_replaced);
@@ -556,9 +607,9 @@ void cache_print_stats() {
     printf("Bank %d hit rate : %.3f%%\n",i, (double)cache->cache_bank[i].hit_num/cache->cache_bank[i].access_num*100);
     printf("Bank %d miss rate: %.3f%%\n",i, (double)cache->cache_bank[i].miss_num/cache->cache_bank[i].access_num*100);
     printf("Bank %d MSHR used times : %llu\n",i, cache->cache_bank[i].MSHR_used_times);
-    printf("Bank %d MSHR used rate  : %.3f%%\n",i, (double)cache->cache_bank[i].MSHR_used_times/cache->cache_bank[i].miss_num*100);
+    printf("Bank %d MSHR used rate  : %.3f%%\n",i, (double)cache->cache_bank[i].MSHR_used_times/cache->cache_bank[i].access_num*100);
     printf("Bank %d MAF used times  : %llu\n",i, cache->cache_bank[i].MAF_used_times);
-    printf("Bank %d MAF used rate   : %.3f%%\n",i, (double)cache->cache_bank[i].MAF_used_times/cache->cache_bank[i].MSHR_used_times*100);
+    printf("Bank %d MAF used rate   : %.3f%%\n",i, (double)cache->cache_bank[i].MAF_used_times/cache->cache_bank[i].access_num*100);
     printf("Bank %d stall times due to MSHR : %llu\n",i, cache->cache_bank[i].stall_MSHR_num);
     printf("================\n");
   }

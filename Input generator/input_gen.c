@@ -11,10 +11,34 @@ int main() {
     printf("Error opening txt file\n");
     exit(1);
   }
-  generate_mapping0(f, 4, 48, 256, true);
+  // generate_mapping0(f, 4, 48, 256, true);
+  // generate_susume(f, 4, 48, 256, false);
+  // generate_susume(f, 4, 48, 256, false);
+  // generate_susume(f, 4, 48, 256, false);
+  // generate_susume(f, 4, 48, 256, false);
+  generate_random_test(f, 1000);
   fclose(f);
   return 0;
 }
+
+// Spatial locality only (The data will never repeat)
+//! Byte base
+void generate_susume(FILE *f, int bank_num, int test_num, int set_num, bool same_index){
+  // time_t t;
+  // srand((unsigned int) time(&t));
+  // unsigned int x = rand();
+  unsigned int x = rand();
+  for (int i=0;i < 500;i++){
+    fprintf(f,"1 %08x 0\n", x);
+    x += 4;
+  }
+}
+
+// Temporal locality only
+
+
+// Spatial & Temporal locality (Multiple loops that will repeat several times)
+//* Note that distance between every read data addr is 4 bytes (1 word = 1 block)
 
 void generate_random_test(FILE *f, int test_num){
   time_t t;
