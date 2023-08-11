@@ -1,9 +1,12 @@
-/**
- * @author ECE 3058 TAs
- */
-
 #ifndef __LRUSTACK_H
 #define __LRUSTACK_H
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include "datastruct.h"
+#include "config.h"
+#include "globalParameter.h"
 
 /**
  * This file contains some starter code to get you started on your LRU implementation.
@@ -22,22 +25,6 @@
  *      that is better for you.
  *      - This will not behave like your traditional LIFO stack
  */
-
-/**
- * struct to hold a cache set's LRU stack. Note that this stack is currently intended
- * to "store the indices of cache blocks" in a cache set in an LRU order. Please make
- * sure you understand that this is NOT written to store whole cache blocks. If you
- * want to do the latter, you will have to change the LRU interface defined in this
- * file.
- */
-typedef struct lru_stack_t
-{
-    int size; // Corresponds to the associativity
-    // TODO: Add anything else needed to maintain a LRU Stack (ex: priority bits?).
-    int *priority;    // Change according to update freq
-                      // If index not match, add everytime cache set update
-                      // the biggest number should be replaced if stack full
-} lru_stack_t;
 
 /**
  * Function to initialize an LRU stack for a cache set with a given <size>. This function

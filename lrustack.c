@@ -1,10 +1,3 @@
-/**
- * @author ECE 3058 TAs
- */
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdbool.h>
 #include "lrustack.h"
 
 /**
@@ -72,12 +65,7 @@ void lru_stack_set_mru(lru_stack_t* stack, int n) {
         if(i!=n)
             stack->priority[i]++;
     }
-    // printf("Set stack priority %d = 0\n",n);
     stack->priority[n] = 0;
-    // printf("Priority List:\n");
-    // for(int i=0;i<stack->size;i++){
-    //     printf("priority[%d] = %d\n",i,stack->priority[i]);
-    // }
 }
 
 /**

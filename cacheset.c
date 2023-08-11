@@ -1,11 +1,3 @@
-/**
- * @author ECE 3058 TAs
- */
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
 #include "cacheset.h"
 /**
  * Function to perform a very basic log2. It is not a full log function, 
@@ -24,9 +16,7 @@ int simple_log_2(int x) {
     return val; 
 }
 
-int block_size;         // Block size
 int cache_set_size;     // Cache size
-int ways;               // Ways
 int num_sets;           // Number of sets
 int num_offset_bits;    // Number of offset bits
 int num_index_bits;     // Number of index bits
@@ -49,7 +39,7 @@ cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
     cache_set_size = _cache_size;   // In byte
     ways = _ways;
     // cache size = block size * ways * number of sets
-    num_sets = cache_set_size / (block_size * ways)*BANK_SIZE;
+    num_sets = cache_set_size / (block_size * ways)*bank_num;
     // num_offset_bits: the offset of desired data in cache block(if cache block size > 32)
     // this variable stands for bits number(size) in addr_t
     num_offset_bits = simple_log_2((block_size/4));
@@ -64,16 +54,6 @@ cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
     for(int i=0;i<num_index_bits;i++){
         index = (index << 1) + 1;
     }
-    // printf("num_sets: %d\n",num_sets);
-    // printf("num_offset_bits: %d\n",num_offset_bits);
-    // printf("num_index_bits: %d\n",num_index_bits);
-    // printf("Offset in bit: %x\n",offset);
-    // printf("Index in bit: %x\n",index);
-    // printf("[1:0]: Byte offset\n");
-    // printf("[%d:2]: Block offset\n",num_offset_bits + 1);
-    // printf("[%d:%d]: Cache index\n",num_offset_bits + num_index_bits + 1,num_offset_bits + 2);
-    // printf("[31:%d]: Tag\n",num_offset_bits + num_index_bits + 2);
-    // Initializing cache
     cache_set_t* cache_set = (cache_set_t*) malloc(num_sets * sizeof(cache_set_t));
     for(int i=0;i<num_sets;i++){
         cache_set[i].size = ways;
@@ -86,7 +66,6 @@ cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
             cache_set[i].blocks[j].dirty = false;
             cache_set[i].blocks[j].tag = 0;
         }
-        // cache_set->blocks->data = (int*) malloc((block_size/32) * sizeof(int));
     }
     return cache_set;
 }
@@ -103,7 +82,7 @@ cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
  * @param destination is the PE index that requested the access.
  * @return maf result.
  */
-int cacheset_access(FILE * wb, cache_set_t* cache_set, cache_t* cache, int choose,  addr_t physical_addr, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks, int mode, int req_number_on_trace) {
+int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t physical_addr, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks, int mode, int req_number_on_trace, traffic_t* traffic) {
     // addr_t is a 32-bit unsigned integer.
     // Encoding:
     // [1:0]                                      : Byte offset
@@ -146,18 +125,9 @@ int cacheset_access(FILE * wb, cache_set_t* cache_set, cache_t* cache, int choos
     offset = ((physical_addr >> 2) & offset);
     index = ((physical_addr >> (num_offset_bits+2)) & index);
     //* Setting the index when address mapping mode = 0 
-    if(mode == 0){
+    if(mode == 0)
         index /= cache->bank_size;
-    }
     tag = (physical_addr >> (num_index_bits + num_offset_bits + 2));
-    // if(physical_addr == 0x102471f){
-    //     printf("Request num = %d\n",cache->cache_bank[choose].request_queue->req_num);
-    //     for(int i = 0;i<cache->cache_bank[choose].request_queue->queue_size;i++){
-    //         printf("Request queue %d: %llx\n",i,cache->cache_bank[choose].request_queue->request_addr[i]);
-    //     }
-    // }
-    // printf("Bank %d Physical addr: %llx\n",choose, physical_addr);
-    // printf("index = %d\n",index);
     bool hit;
     int hit_index = 0;
     for(int i=0;i<ways;i++){
@@ -165,20 +135,14 @@ int cacheset_access(FILE * wb, cache_set_t* cache_set, cache_t* cache, int choos
         if(cache_set[index].blocks[i].tag == tag && cache_set[index].blocks[i].valid){
             hit = true;
             hit_index = i;
-            fprintf(wb, "Hit! tag: %x is inside cache bank %d set %d block %d\n",tag,choose,index,i);
-            // getchar();
             //* One scenario is that this cache line is sent back recently, and its MAF queue might not be cleared yet
             //* In this case, the request needs to send to MAF queue first
             if(cache->cache_bank[choose].mshr_queue->enable_mshr){
                 int mshr_index = mshr_queue_check_exist(cache->cache_bank[choose].mshr_queue, tag, index);
                 if(mshr_index != -1){
-                    fprintf(wb, "But this cache line is sent back recently, and its MAF queue is not cleared yet\n");
-                    fprintf(wb, "So the request needs to send to MAF queue, but it still counted as a miss\n");
                     *hits = *hits + 1;
-                    // printf("misses = %d\n",*misses);
                     cache->cache_bank[choose].hit_num++;
-                    int maf_index = log_maf_queue(mshr_index, cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination, tag);
-                    // printf("Bank %d MSHR %d MAF %d is added\n",choose,mshr_index,maf_index);
+                    int maf_index = log_maf_queue(mshr_index, cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination, tag, traffic);
                     return 2;
                 }
             }
@@ -186,60 +150,48 @@ int cacheset_access(FILE * wb, cache_set_t* cache_set, cache_t* cache, int choos
         }
     }
     if(hit){
+        // printf("Hit!\n");
         // hit
         *hits = *hits + 1;
         // Read: consider block index
         cache->cache_bank[choose].hit_num++;
-        // printf("Bank %d hits = %lld\n",choose,cache->cache_bank[choose].hit_num);
-        // getchar();
         // Write: need to update dirty bit also
         if(access_type == MEMWRITE)
             cache_set[index].blocks[hit_index].dirty = true;
-        // inst. read:
-        // if(choose == 0 && index == 56){
-        //     counter2++;
-        //     fprintf(wb,"counter2 = %d\n",counter2);
-        //     fprintf(wb, "addr = 0x%llx, tag = %x, req_num = %d\n", physical_addr, tag, req_number_on_trace);
-        //     fprintf(wb, "LRU hit update = %d, LRU miss update = %d\n",counter,counter2);
-        //     for(int i =0;i<ways;i++){
-        //         fprintf(wb, "Bank %d Cache[%d] Block[%d], valid = %d, tag = %x, dirty = %d, priority = %d\n",choose, index,i,cache_set[index].blocks[i].valid,cache_set[index].blocks[i].tag,cache_set[index].blocks[i].dirty,cache_set[index].stack->priority[i]);
-        //     }
-        //     fprintf(wb, "===================\n");
-        // }
-        // else{
-        //     fprintf(wb,"Not Bank 0 Index 56\n");
-        // }
         // Update LRU
         lru_stack_set_mru(cache_set[index].stack, hit_index);
-        // printf("LRU is updated\n");
+        //* Update traffic table status
+        if(running_mode == 2){
+            traffic->finished = true;
+            printf("Traffic data %x finished\n", traffic->data);
+        }
         return 3;
     }
     else{
         if(cache->cache_bank[choose].mshr_queue->enable_mshr){
-            int mshr_status = mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination, tag, req_number_on_trace, index);
+            int mshr_status;
+            //* For traffic trace
+            // if(running_mode == 2)
+            mshr_status = mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination, tag, req_number_on_trace, index, traffic);
+            // else
+            //     mshr_status = mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination, tag, req_number_on_trace, index, NULL);
             if (!(mshr_status == 0 || mshr_status == -1)){
                 // miss
-                fprintf(wb, "Miss! tag: %x is not inside cache\n",tag);
                 *misses = *misses + 1;
-                // printf("misses = %d\n",*misses);
                 cache->cache_bank[choose].miss_num++;
-                // printf("Bank %d misses = %lld\n",choose,cache->cache_bank[choose].miss_num);
             }
             return mshr_status;
         }
         else{
             // miss
-            // printf("Miss! tag: %x is not inside cache\n",tag);
             *misses = *misses + 1;
             cache->cache_bank[choose].miss_num++;
-            // printf("Bank %d misses = %lld\n",choose,cache->cache_bank[choose].miss_num);
             return 0;
         }
     }
 }
 
-void cacheset_load_MSHR_data(FILE* wb, int set_num, int choose, cache_t* cache,cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced, int mode, int req_number_on_trace){
-    // printf("-> Addr: %llx Type: %d\n",physical_addr,access_type);
+void cacheset_load_MSHR_data(int set_num, int choose, cache_t* cache,cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced, int mode, int req_number_on_trace){
     bool replace_block;
     unsigned int offset = 0;
     unsigned int index = 0;
@@ -255,34 +207,7 @@ void cacheset_load_MSHR_data(FILE* wb, int set_num, int choose, cache_t* cache,c
     tag = (physical_addr >> (num_index_bits + num_offset_bits + 2));
     //* Setting the index when address mapping mode = 0 
     if(mode == 0){
-        // printf("(Before) Index = %d\n",index);
         index /= cache->bank_size;
-        // printf("(After) Index = %d\n",index);
-        // printf("Bank = %d\n",choose);
-        // getchar();
-    }
-    // printf("-> Return Index = %x\n",index);
-    // printf("-> Return tag = %x\n",tag);
-    //! Check if tag is already inside cache
-    for(int i=0;i<ways;i++){
-        // printf("Bank %d Cache[%d] Block[%d] = %x, valid = %d, Priority = %d\n",choose, index,i,cache_set[index].blocks[i].tag,cache_set[index].blocks[i].valid, cache_set[index].stack->priority[i]);
-        if(cache_set[index].blocks[i].tag == tag && cache_set[index].blocks[i].valid){
-            // printf("-> Tag is already inside cache\n");
-            return;
-        }
-    }
-    if(choose == 0 && index == 56){
-        counter++;
-        fprintf(wb, "counter = %d\n",counter);
-        fprintf(wb, "addr = 0x%llx, tag = %x, req_num = %d\n", physical_addr, tag, req_number_on_trace);
-        fprintf(wb, "LRU hit update = %d, LRU miss update = %d\n",counter,counter2);
-        for(int i =0;i<ways;i++){
-            fprintf(wb, "Bank %d Cache[%d] Block[%d], valid = %d, tag = %x, dirty = %d, priority = %d\n",choose, index,i,cache_set[index].blocks[i].valid,cache_set[index].blocks[i].tag,cache_set[index].blocks[i].dirty,cache_set[index].stack->priority[i]);
-        }
-        fprintf(wb, "===================\n");
-    }
-    else{
-        fprintf(wb,"Not Bank 0 Index 56\n");
     }
     for(int i=0;i<ways;i++){
         replace_block = true;
@@ -296,20 +221,15 @@ void cacheset_load_MSHR_data(FILE* wb, int set_num, int choose, cache_t* cache,c
                 cache_set[index].blocks[i].dirty = true;
             // Update LRU
             lru_stack_set_mru(cache_set[index].stack, i);
-            // printf("LRU is updated\n");
             break;
         }
     }
     if(replace_block){
         // Cache is full
         int lru_index = lru_stack_get_lru(cache_set[index].stack);
-        // Check if replacing block is dirty
-        // printf("Full! way %d is replacing\n",lru_index);
-        // getchar();
         if(cache_set[index].blocks[lru_index].dirty){
             *writebacks = *writebacks + 1;
             cache->cache_bank[choose].writeback_num++;
-            // printf("writebacks address: 0x%llx, index: %d\n",physical_addr, index);
         }
         else{
             *non_dirty_replaced = *non_dirty_replaced + 1;
@@ -323,11 +243,7 @@ void cacheset_load_MSHR_data(FILE* wb, int set_num, int choose, cache_t* cache,c
         cache_set[index].blocks[lru_index].valid = true;
         // Update LRU
         lru_stack_set_mru(cache_set[index].stack, lru_index);
-        // printf("LRU is updated\n");
     }
-    // for(int i=0;i<ways;i++){
-    //     printf("After: Bank %d Cache[%d] Block[%d] = %x, valid = %d, Priority = %d\n",choose, index,i,cache_set[index].blocks[i].tag,cache_set[index].blocks[i].valid, cache_set[index].stack->priority[i]);
-    // }
 }
 /**
  * Function to free up any dynamically allocated memory.

@@ -1,5 +1,9 @@
 {
   "files.associations": {
-    "ctime": "c"
-  }
+    "ctime": "c",
+    "cstdint": "c",
+    "cstdio": "c",
+    "type_traits": "c",
+    "string.h": "c"
+}
 }

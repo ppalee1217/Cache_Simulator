@@ -1,19 +1,29 @@
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef _CONFIG_H
+#define _CONFIG_H
 
-// typedef
-typedef unsigned long long addr_t;
+#define ADDRESSING_MODE 0
+// Configurable parameters
+#define MISS_CYCLE 20
+#define REQ_QUEUE_SIZE 4
+#define MSHR_ENTRY 8        // 8 entries (0 if no MSHR)
+#define MAF_ENTRY 4
+#define BANK_SIZE 4
+#define WAYS 8
+#define BLOCK_SIZE 32       // 32 bytes
+#define CACHE_SIZE 65536    // 64KB
+// Use these in code to make mem read/mem write/inst read related code more readable
+#define MEMREAD 0
+#define MEMWRITE 1
+#define IFETCH 2
+
+// 
+#define DEFAULT_QUEUE_CAPACITY 1000
+
 // Mapping mode
 // void setAddrMappingMode(int mode){
 //   #define ADDRESSING_MODE mode
 // }
-#define ADDRESSING_MODE 1
-// Configurable parameters
-#define MISS_CYCLE 20
-#define REQ_QUEUE_SIZE 4
-#define MSHR_ENTRY 8
-#define MAF_ENTRY 4
-#define BANK_SIZE 4
+
 // void setReqQEntryNum(int num){
 //   #define REQ_QUEUE_SIZE num
 // }
@@ -31,7 +41,6 @@ typedef unsigned long long addr_t;
 // }
 
 // Get data from Cache
-int getTotalCycle();
-int getBankId();
-
+// int getTotalCycle();
+// int getBankId();
 #endif

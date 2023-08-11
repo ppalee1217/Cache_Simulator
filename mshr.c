@@ -1,6 +1,3 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdbool.h>
 #include "mshr.h"
 
 /**
@@ -25,6 +22,7 @@ mshr_queue_t* init_mshr_queue(int bank_num, int entires, int inst_num) {
   queue->mshr = init_mshr(entires ,inst_num);
   return queue;
 }
+
 /**
  * Function to initialize an single MSHR for a MSHR Queue with a given <inst_num>. This function
  * creates a MSHR. 
@@ -56,33 +54,29 @@ mshr_t* init_mshr(int entires, int inst_num){
  * @param type is the operation type of the instruction - 0 for load, 1 for store, 2 for instruction read (not used).
  * @return -1 if the MAF is full, 0 if the MSHR is full, 1 if the request is not in MSHR, 2 if the request is in MSHR and MAF is not full.
  */
-int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination, int tag, int req_number_on_trace, int index){
-  // printf("MSHR: block_addr = %p\n", block_addr);
+int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination, int tag, int req_number_on_trace, int index, traffic_t* traffic){
   if(queue->enable_mshr){
     int empty_entry = -1;
     //* Search if there exist MSHR entry has isseued to the same tag
     for(int i =0 ;i<queue->entries;i++){
       //! This MSHR entry is already exist
       if(queue->mshr[i].valid && (queue->mshr[i].tag) == (tag) && (queue->mshr[i].index == index)){
-        // printf("Bank %d MSHR %d is already exist\n",queue->bank_num, i);
+        // printf("This tag MSHR entry is already exist\n");
         for(int j = 0; j<queue->mshr[i].maf_size;j++){
           if(!queue->mshr[i].maf[j].valid){
             //! MAF is not full
-            // printf("Bank %d MAF %d is empty, new MAF entry is added\n",queue->bank_num, j);
+            // printf("And MAF is not full\n");
             queue->mshr[i].maf[j].valid = true;
             queue->mshr[i].maf[j].type = type;
             queue->mshr[i].maf[j].req_number_on_trace = req_number_on_trace;
             queue->mshr[i].maf_used_num++;
-            // queue->mshr[i].maf[j].block_offsset = block_offset;
-            // queue->mshr[i].maf[j].destination = destination;
-            // for(int k = 0; k<queue->mshr[i].maf_size;k++){
-            //   printf("Bank %d MSHR %d MAF Queue %d = %d\n",queue->bank_num,i,k,queue->mshr[i].maf[k].valid);
-            // }
+            //* Trace traffic of noxim
+            queue->mshr[i].maf[j].traffic = traffic;
             return 2;
           }
         }
         //* If MAF queue is full, return -1 (to stall the pipeline)
-        // printf("Bank %d MAF is full, stall the pipeline\n",queue->bank_num);
+        // printf("But MAF is full\n");
         return -1;
       }
     }
@@ -94,37 +88,32 @@ int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, uns
         break;
       }
     }
-    // printf("empty_entry = %d\n", empty_entry);
     //! Check if there is any empty entry left
     if(empty_entry != -1){
-      // printf("Bank %d MSHR %d is empty, new MSHR entry is added, addr = %p\n",queue->bank_num, empty_entry, block_addr);
-      // printf("Also, MAF %d is empty, new MAF entry is added\n", 0);
-      queue->mshr[empty_entry].valid = true;
-      queue->mshr[empty_entry].issued = false;
-      queue->mshr[empty_entry].block_addr = block_addr;
-      queue->mshr[empty_entry].tag = tag;
-      queue->mshr[empty_entry].index = index;
-      queue->mshr[empty_entry].maf[0].valid = true;
-      queue->mshr[empty_entry].maf[0].type = type;
-      queue->mshr[empty_entry].maf[0].req_number_on_trace = req_number_on_trace;
-      queue->mshr[empty_entry].maf_used_num++;
-      return 1;
+        // printf("There is empty entry at %d\n", empty_entry);
+        queue->mshr[empty_entry].valid = true;
+        queue->mshr[empty_entry].issued = false;
+        queue->mshr[empty_entry].block_addr = block_addr;
+        queue->mshr[empty_entry].tag = tag;
+        queue->mshr[empty_entry].index = index;
+        queue->mshr[empty_entry].maf[0].valid = true;
+        queue->mshr[empty_entry].maf[0].type = type;
+        queue->mshr[empty_entry].maf[0].req_number_on_trace = req_number_on_trace;
+        queue->mshr[empty_entry].maf_used_num++;
+        //* Trace traffic of noxim
+        queue->mshr[empty_entry].maf[0].traffic = traffic;
+        return 1;
     }
     //* There is no empty MSHR entry left, return false (to stall the pipeline)
-    // printf("Bank %d MSHR is full, stall the pipeline\n",queue->bank_num);
+    // printf("There is no empty entry\n");
     return 0;
   }
 }
 
 int mshr_queue_check_isssue(mshr_queue_t* queue){
   for(int i =0 ;i<queue->entries;i++){
-    // printf("-- Bank %d MSHR %d is valid: %d, is issued: %d\n",queue->bank_num, i, queue->mshr[i].valid, queue->mshr[i].issued);
     if(queue->mshr[i].valid && !queue->mshr[i].issued){
       queue->mshr[i].issued = true;
-      // printf("Bank %d MSHR %d issued. tag = %x\n",queue->bank_num, i, queue->mshr[i].tag);
-      // for(int j = 0; j<queue->mshr[i].maf_size;j++){
-      //   printf("Bank %d MSHR %d MAF Queue %d = %d\n",queue->bank_num,i,j,queue->mshr[i].maf[j].valid);
-      // }
       return i;
     }
   }
@@ -134,8 +123,7 @@ int mshr_queue_check_isssue(mshr_queue_t* queue){
 void mshr_queue_check_data_returned(mshr_queue_t* queue){
   for(int i =0 ;i<queue->entries;i++){
     if(queue->mshr[i].valid && queue->mshr[i].issued){
-      if(queue->mshr[i].counter == MISS_CYCLE){
-        // printf("Bank %d MSHR %d data returned.\n",queue->bank_num, i);
+      if(queue->mshr[i].counter == miss_cycle){
         queue->mshr[i].counter = 0;
         queue->mshr[i].data_returned = true;
       }
@@ -155,33 +143,15 @@ int mshr_queue_check_exist(mshr_queue_t* queue, unsigned int tag, int index){
   return -1;
 }
 
-// bool mshr_queue_check_specific_data_returned(mshr_queue_t* queue, unsigned long long block_addr){
-//   for(int i =0 ;i<queue->entries;i++){
-//     if(queue->mshr[i].valid && queue->mshr[i].block_addr == block_addr){
-//       if(queue->mshr[i].data_returned)
-//         return true;
-//       else
-//         return false;
-//     }
-//   }
-//   return false;
-// }
-
 void mshr_queue_counter_add(mshr_queue_t* queue){
   for(int i =0 ;i<queue->entries;i++){
-    // printf("MSHR queue %d tag = %p valid= %d, issued =%d\n",i,queue->mshr[i].tag,queue->mshr[i].valid,queue->mshr[i].issued);
     if(queue->mshr[i].valid && queue->mshr[i].issued){
       queue->mshr[i].counter++;
-      // printf("MSHR %d counter: %d\n", i, queue->mshr[i].counter);
     }
   }
-  // printf("---------------------\n");
 }
 
 int mshr_queue_clear_inst(mshr_queue_t* queue, int entries){
-  for(int i = 0; i<queue->mshr[entries].maf_size;i++){
-    // printf("Bank %d MSHR %d MAF Queue %d = %d\n",queue->bank_num,entries,i,queue->mshr[entries].maf[i].valid);
-  }
   if(queue->mshr[entries].valid && queue->mshr[entries].data_returned){
     if(queue->mshr[entries].last_index != -1){
       int index = queue->mshr[entries].last_index + 1;
@@ -191,12 +161,18 @@ int mshr_queue_clear_inst(mshr_queue_t* queue, int entries){
       queue->mshr[entries].maf[index].valid = false;
       queue->mshr[entries].maf_used_num--;
       queue->mshr[entries].last_index = index;
+      //* Trace traffic of noxim
+      if(running_mode == 2){
+        // printf("Traffic %d finished\n", queue->mshr[entries].maf[index].traffic->packet_id);
+        queue->mshr[entries].maf[index].traffic->finished = true;
+        printf("Traffic data %x finished\n", queue->mshr[entries].maf[index].traffic->data);
+        // queue->mshr[entries].maf[index].traffic = NULL;
+      }
       if(queue->mshr[entries].maf_used_num==0){
         queue->mshr[entries].valid = false;
         queue->mshr[entries].issued = false;
         queue->mshr[entries].data_returned = false;
       }
-      // printf("Clearing MAF %d\n",index);
       queue->mshr[entries].last_index = index;
       return queue->mshr[entries].maf[index].type;
     }
@@ -205,14 +181,19 @@ int mshr_queue_clear_inst(mshr_queue_t* queue, int entries){
         if(queue->mshr[entries].maf[j].valid){
           // keep looping to clear maf inst
           queue->mshr[entries].maf[j].valid = false;
-          // printf("Clearing Bank %d MSHR %d MAF Queue %d\n",queue->bank_num,entries,j);
           queue->mshr[entries].maf_used_num--;
+          //* Trace traffic of noxim
+          if(running_mode == 2){
+            // printf("Traffic %d finished\n", queue->mshr[entries].maf[j].traffic->packet_id);
+            queue->mshr[entries].maf[j].traffic->finished = true;
+            printf("Traffic data %x finished\n", queue->mshr[entries].maf[j].traffic->data);
+            // queue->mshr[entries].maf[j].traffic = NULL;
+          }
           if(queue->mshr[entries].maf_used_num==0){
             queue->mshr[entries].valid = false;
             queue->mshr[entries].issued = false;
             queue->mshr[entries].data_returned = false;
           }
-          // printf("Clearing MAF %d\n",j);
           queue->mshr[entries].last_index = j;
           return queue->mshr[entries].maf[j].type;
         }
@@ -223,19 +204,15 @@ int mshr_queue_clear_inst(mshr_queue_t* queue, int entries){
 }
 
 //* Return the logged MAF entry index
-int log_maf_queue(int mshr_index, mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination, int tag){
+int log_maf_queue(int mshr_index, mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination, int tag, traffic_t* traffic){
   for(int j = 0; j<queue->mshr[mshr_index].maf_size;j++){
     if(!queue->mshr[mshr_index].maf[j].valid){
       //! MAF is not full
-      // printf("Bank %d MAF %d is empty, new MAF entry is added\n",queue->bank_num, j);
       queue->mshr[mshr_index].maf[j].valid = true;
       queue->mshr[mshr_index].maf[j].type = type;
       queue->mshr[mshr_index].maf_used_num++;
-      // queue->mshr[mshr_index].maf[j].block_offsset = block_offset;
-      // queue->mshr[mshr_index].maf[j].destination = destination;
-      // for(int k = 0; k<queue->mshr[mshr_index].maf_size;k++){
-      //   printf("Bank %d MSHR %d MAF Queue %d = %d\n",queue->bank_num,mshr_index,k,queue->mshr[mshr_index].maf[k].valid);
-      // }
+      //* Trace traffic of noxim
+      queue->mshr[mshr_index].maf[j].traffic = traffic;
       return j;
     }
   }
