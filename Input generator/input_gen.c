@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <cstdlib>
+#include <stdbool.h>
 #include <ctime>
 #include <math.h>
 #include "input_gen.h"
@@ -44,10 +45,19 @@ void generate_random_test(FILE *f, int test_num){
   time_t t;
   srand((unsigned int) time(&t));
   for(int i=0; i<test_num; i++){
-    unsigned int x = rand();
-    if (x%2 == 0)
-      x= x | (1<<31);
-    fprintf(f,"1 %08x 0\n",x);
+    bool read = rand()%2;
+    unsigned long long addr = rand();
+    unsigned int* data = (unsigned int*)malloc(sizeof(unsigned int)*8);
+    if (addr%2 == 0)
+      addr = addr | (1<<31);
+    if(read){
+        fprintf(f,"%d %016llx %08x %08x %08x %08x %08x %08x %08x %08x\n",read, addr, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+    else{
+        for(int i=0;i<8;i++)
+            data[i] = rand();
+        fprintf(f,"%d %016llx %08x %08x %08x %08x %08x %08x %08x %08x\n",read, addr, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+    }
   }
 }
 

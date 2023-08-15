@@ -13,7 +13,7 @@ extern int block_size;
 extern int cache_size;
 extern int ways;
 
-extern Queue* trafficTableQueue;
+extern Queue** trafficTableQueue;
 extern int running_mode;
 
 #endif

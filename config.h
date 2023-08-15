@@ -12,8 +12,8 @@
 #define BLOCK_SIZE 32       // 32 bytes
 #define CACHE_SIZE 65536    // 64KB
 // Use these in code to make mem read/mem write/inst read related code more readable
-#define MEMREAD 0
-#define MEMWRITE 1
+#define MEMWRITE 0
+#define MEMREAD 1
 #define IFETCH 2
 
 // 

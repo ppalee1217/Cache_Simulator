@@ -57,6 +57,6 @@ void req_queue_forward(request_queue_t *request_queue);
 // Function
 void cache_print_stats(void);
 int next_line(FILE* trace);
-int checkTrafficTable();
+int checkTrafficTable(Queue* trafficTable, int nic_id);
 FILE *open_trace(const char *filename);
 #endif

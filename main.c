@@ -3,8 +3,8 @@
 
 cache_t* cache;         // Data structure for the cache
 int cache_block_size;         // Block size
-int cache_ways;               // cache_ways
 int cache_num_sets;           // Number of sets
+int cache_ways;               // cache_ways
 int cache_num_offset_bits;    // Number of block bits
 int cache_num_index_bits;     // Number of cache_set_index bits
 unsigned long long file_pointer_temp; // Temp file pointer for trace file
@@ -23,7 +23,7 @@ counter_t MSHR_used_times = 0;    // Total number of MSHR used times
 counter_t MAF_used_times = 0;     // Total number of MAF used times
 bool enable = false;              // Enable debug mode
 //! For NOXIM
-Queue* trafficTableQueue;
+Queue** trafficTableQueue;
 bool noxim_finish = false;  // Indicate if NOXIM input is finish
 bool cache_finish = false;  // Indicate if cache finish all request
 bool noc_finish[4] = {false, false, false, false}; // Indicate if noc finish all sent back request
@@ -39,6 +39,8 @@ int cache_size;
 int ways;
 //! Running mode
 int running_mode;
+//! Traffic Queue number
+int queue_num = 0;
 
 void init_global_parameter();
 
@@ -167,7 +169,24 @@ void fedByTrace(){
 void fedByNoxim(){
     //* trafficTableQueue multiple thread protection is not implemented yet
     printf("Running in Noxim mode.\n");
-    trafficTableQueue = createQueue(DEFAULT_QUEUE_CAPACITY);
+    if(bank_num >= 4){
+        queue_num = 4;
+        mutex = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t)*4);
+        trafficTableQueue = (Queue**)malloc(sizeof(Queue*)*4);
+        for(int i=0;i<4;i++){
+            mutex[i] = PTHREAD_MUTEX_INITIALIZER;
+            trafficTableQueue[i] = createQueue(DEFAULT_QUEUE_CAPACITY);
+        }
+    }
+    else{
+        mutex = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t)*bank_num);
+        queue_num = bank_num;
+        trafficTableQueue = (Queue**)malloc(sizeof(Queue*)*bank_num);
+        for(int i=0;i<bank_num;i++){
+            mutex[i] = PTHREAD_MUTEX_INITIALIZER;
+            trafficTableQueue[i] = createQueue(DEFAULT_QUEUE_CAPACITY);
+        }
+    }
     cache_init(bank_num, block_size, cache_size, ways);
     pthread_t t1, t2, t3, t4, t5, t6, t7, t8, t9;
     int id[4] = {4,9,14,19};
@@ -242,7 +261,7 @@ void* checkNoC(void* arg){
             usleep(10);
         }
         printf("\n(R) Request received!\n");
-        pthread_mutex_lock(&mutex1);
+        pthread_mutex_lock(&mutex[*cache_nic_id/5]);
         ready = CHECKREADY(ptr);
         valid = CHECKVALID(ptr);
         resetIPC_Ready(ptr);
@@ -276,10 +295,10 @@ void* checkNoC(void* arg){
         setIPC_Ack(ptr);
         // data_test = GETTEST(ptr, 15);
         printf("<<Reader Transaction completed!>>\n");
-        transPacketToTraffic(packet);
+        transPacketToTraffic(packet, *cache_nic_id/5);
         while(CHECKACK(ptr)!=0){
         }
-        pthread_mutex_unlock(&mutex1);
+        pthread_mutex_unlock(&mutex[*cache_nic_id/5]);
     }
 }
 
@@ -288,10 +307,10 @@ void* sentBackToNoC(void* arg){
     while(!noc_finish[*cache_nic_id/5]){
         uint32_t data_test;
         bool sent = false;
-        if(trafficTableQueue->trafficTable[trafficTableQueue->front].src_id == *cache_nic_id && trafficTableQueue->trafficTable[trafficTableQueue->front].finished){
-            pthread_mutex_lock(&mutex1);
-            traffic_t traffic = dequeue(trafficTableQueue);
-            pthread_mutex_unlock(&mutex1);
+        if(trafficTableQueue[*cache_nic_id/5]->trafficTable[trafficTableQueue[*cache_nic_id/5]->front].src_id == *cache_nic_id && trafficTableQueue[*cache_nic_id/5]->trafficTable[trafficTableQueue[*cache_nic_id/5]->front].finished){
+            pthread_mutex_lock(&mutex[*cache_nic_id/5]);
+            traffic_t traffic = dequeue(trafficTableQueue[*cache_nic_id/5]);
+            pthread_mutex_unlock(&mutex[*cache_nic_id/5]);
             if(!traffic.tail){
                 if(traffic.req_size == 0){
                     resetsendBackPacket();
@@ -340,7 +359,7 @@ void* sentBackToNoC(void* arg){
                 // printf("Wait for NoC to set ready signal.\n");
                 while(CHECKREADY(ptr) != 1){
                     // if(cache_finish){
-                    //     if(isEmpty(trafficTableQueue)){
+                    //     if(isEmpty(trafficTableQueue[*cache_nic_id/5])){
                     //         noc_finish[*cache_nic_id/5] = true;
                     //         printf("There is no traffic to be sent back by Cache NIC %d.\n", *cache_nic_id/5);
                     //         pthread_exit(NULL);
@@ -372,7 +391,7 @@ void* sentBackToNoC(void* arg){
                 //! Check if there is any request to be sent back when Cache Simulator finishs all its work
                 //! Otherwise, set finish signal for this Cache NIC IPC channel
                 if(cache_finish){
-                    // if(isEmpty(trafficTableQueue)){
+                    // if(isEmpty(trafficTableQueue[*cache_nic_id/5])){
                     //     noc_finish[*cache_nic_id/5] = true;
                     //     printf("There is no traffic to be sent back by Cache NIC %d.\n", *cache_nic_id/5);
                     // }
@@ -386,8 +405,8 @@ void* sentBackToNoC(void* arg){
                 printf("<<Writer Transaction completed!>>\n");
             }
             if(cache_finish){
-                // printf("Traffic Table is empty? %d\n", isEmpty(trafficTableQueue));
-                if(isEmpty(trafficTableQueue)){
+                // printf("Traffic Table is empty? %d\n", isEmpty(trafficTableQueue[*cache_nic_id/5]));
+                if(isEmpty(trafficTableQueue[*cache_nic_id/5])){
                     noc_finish[*cache_nic_id/5] = true;
                     printf("There is no traffic to be sent back by Cache NIC %d.\n", *cache_nic_id/5);
                 }
@@ -398,14 +417,21 @@ void* sentBackToNoC(void* arg){
 
 void* runCache_noxim(void* arg){
     while(!noxim_finish){
-        if(!(isEmpty(trafficTableQueue))){
+        bool stall = false;
+        for(int i =0;i<queue_num;i++){
+            if(isEmpty(trafficTableQueue[i])){
+                stall = true;
+                break;
+            }
+        }
+        if(!stall){
             cycles++;
             int input_status;
             // * Load input to request queue
-            for(int i =0;i<cache->bank_size;i++){
-                pthread_mutex_lock(&mutex1);
-                input_status = checkTrafficTable();
-                pthread_mutex_unlock(&mutex1);
+            for(int i =0;i<queue_num;i++){
+                pthread_mutex_lock(&mutex[i]);
+                input_status = checkTrafficTable(trafficTableQueue[i], i);
+                pthread_mutex_unlock(&mutex[i]);
                 if(input_status == 0){
                     // printf("Traffic Table is empty or no traffic can be processed now.\n");
                 }
@@ -464,10 +490,6 @@ void* runCache_noxim(void* arg){
 }
 
 void* executeRemainTraffic(void* arg){
-    if(running_mode == 2){
-        printf("\n<<executeRemainTraffic>>\n");
-        printf("trafficTableQueue size: %ld\n", trafficTableQueue->size);
-    }
     // ! Execution not done yet => request queue need to be cleared
     printf("Clearing Request Queue & MSHR Queue...\n");
     printf("Cycle: %lld\n", cycles);
@@ -641,7 +663,7 @@ char* concatenateStrings(const char* str1, const char* str2) {
     return concatenated;
 }
 
-void transPacketToTraffic(packet_data packet){
+void transPacketToTraffic(packet_data packet, int id){
     bool loop = true;
     int counter = 0;
     int req_size = packet.request_size;
@@ -673,7 +695,7 @@ void transPacketToTraffic(packet_data packet){
             traffic.tail = true;
             traffic.noxim_finish = packet.finish;
         }
-        enqueue(trafficTableQueue, traffic);
+        enqueue(trafficTableQueue[id], traffic);
     }
 }
 

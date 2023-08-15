@@ -33,7 +33,7 @@
 #define GETTEST(p,pos) (*(p + pos))
 
 // Mutex to protect the global parameter
-pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t* mutex;
 packet_data sendBackPacket;
 
 void* runCache_noxim(void* arg);
@@ -42,7 +42,7 @@ void* checkNoC(void* arg);
 void* sentBackToNoC(void* arg);
 char* concatenateStrings(const char* str1, const char* str2);
 void resetsendBackPacket();
-void transPacketToTraffic(packet_data packet);
+void transPacketToTraffic(packet_data packet, int id);
 void setIPC_Data(uint32_t *ptr, uint32_t data, int const_pos, int varied_pos);
 void setIPC_Valid(uint32_t *ptr);
 void resetIPC_Valid(uint32_t *ptr);

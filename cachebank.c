@@ -67,50 +67,6 @@ void load_request(request_queue_t* request_queue, addr_t addr, unsigned int tag,
     request_queue->request_type[request_queue->req_num] = type;
     request_queue->req_number_on_trace[request_queue->req_num] = req_number_on_trace;
     request_queue->traffic[request_queue->req_num] = traffic;
-    // printf("Traffic is loaded to request queue at %d\n", request_queue->req_num);
-    // printf("Test1:\n");
-    // printf("  src: %d\n", traffic->src_id);
-    // printf("  dst: %d\n", traffic->dst_id);
-    // printf("  packet id: %d\n", traffic->packet_id);
-    // printf("  reqs: %llx\n", traffic->addr);
-    // printf("  req type: %d\n", traffic->req_type);
-    // printf("  req size: %d\n", traffic->req_size);
-    // printf("  valid: %d\n", traffic->valid);
-    // printf("  working: %d\n", traffic->working);
-    // printf("  finished: %d\n", traffic->finished);
-    // printf("======================================\n");
-    // printf("  src: %d\n", request_queue->traffic[request_queue->req_num]->src_id);
-    // printf("  dst: %d\n", request_queue->traffic[request_queue->req_num]->dst_id);
-    // printf("  packet id: %d\n", request_queue->traffic[request_queue->req_num]->packet_id);
-    // printf("  reqs: %llx\n", request_queue->traffic[request_queue->req_num]->addr);
-    // printf("  req type: %d\n", request_queue->traffic[request_queue->req_num]->req_type);
-    // printf("  req size: %d\n", request_queue->traffic[request_queue->req_num]->req_size);
-    // printf("  valid: %d\n", request_queue->traffic[request_queue->req_num]->valid);
-    // printf("  working: %d\n", request_queue->traffic[request_queue->req_num]->working);
-    // printf("  finished: %d\n", request_queue->traffic[request_queue->req_num]->finished);
-    // request_queue->traffic[request_queue->req_num]->finished = true;
-    // printf("\nTest2:\n");
-    // printf("Traffic:\n");
-    // printf("  src: %d\n", traffic->src_id);
-    // printf("  dst: %d\n", traffic->dst_id);
-    // printf("  packet id: %d\n", traffic->packet_id);
-    // printf("  reqs: %llx\n", traffic->addr);
-    // printf("  req type: %d\n", traffic->req_type);
-    // printf("  req size: %d\n", traffic->req_size);
-    // printf("  valid: %d\n", traffic->valid);
-    // printf("  working: %d\n", traffic->working);
-    // printf("  finished: %d\n", traffic->finished);
-    // printf("======================================\n");
-    // printf("  src: %d\n", request_queue->traffic[request_queue->req_num]->src_id);
-    // printf("  dst: %d\n", request_queue->traffic[request_queue->req_num]->dst_id);
-    // printf("  packet id: %d\n", request_queue->traffic[request_queue->req_num]->packet_id);
-    // printf("  reqs: %llx\n", request_queue->traffic[request_queue->req_num]->addr);
-    // printf("  req type: %d\n", request_queue->traffic[request_queue->req_num]->req_type);
-    // printf("  req size: %d\n", request_queue->traffic[request_queue->req_num]->req_size);
-    // printf("  valid: %d\n", request_queue->traffic[request_queue->req_num]->valid);
-    // printf("  working: %d\n", request_queue->traffic[request_queue->req_num]->working);
-    // printf("  finished: %d\n", request_queue->traffic[request_queue->req_num]->finished);
-    // request_queue->traffic[request_queue->req_num]->finished = false;
     request_queue->req_num++;
 }
 
@@ -254,12 +210,12 @@ FILE *open_trace(const char *filename) {
  * 
  * @return 0 when traffic table is empty or no request can be processed, 1 when a request is processed, 2 when request queue is full.
  */
-int checkTrafficTable(){
-    if(isEmpty(trafficTableQueue)){
+int checkTrafficTable(Queue* trafficTable, int nic_id){
+    if(isEmpty(trafficTable)){
         return 0;
     }
     else{
-        traffic_t* traffic = &(trafficTableQueue->trafficTable[trafficTableQueue->front]);
+        traffic_t* traffic = &(trafficTable->trafficTable[trafficTable->front]);
         if(traffic->valid && !traffic->working){
             unsigned int index_mask = 0;
             unsigned int cache_set_index = 0;
@@ -306,7 +262,7 @@ int checkTrafficTable(){
                 }
             }
             else if(addr_mode == 2){
-
+                // TODO
             }
             accesses++;
             return 1;
