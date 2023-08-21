@@ -16,4 +16,6 @@ extern int ways;
 extern Queue** trafficTableQueue;
 extern int running_mode;
 
+#define INPUT_NUM 1000
+
 #endif

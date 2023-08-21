@@ -29,13 +29,18 @@ int main() {
     while(src_id == 0 || (src_id+1)%5 == 0){
         src_id = rand()%20;
     }
+    int req_size = 8;
+    // src, dst, finish, count, isReqt, req_size, req_addr,
+    // req_type, req_data[0], req_data[1], req_data[2], req_data[3],
+    // req_data[4], req_data[5], req_data[6], req_data[7],
+    // pir, por, t_on, t_off, t_period
     if(feof(trace_cache)){
-        fprintf(trace_noxim,"%d %d %d %d %d %d %016llx %d %08x %08x %08x %08x %08x %08x %08x %08x\n",src_id, -1, 1, 1, 1, 1, address, type, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
-        fprintf(trace_noxim,"%d %d %d %d %d %d %016llx %d %08x %08x %08x %08x %08x %08x %08x %08x\n",src_id, -1, 1, 1, 0, 1, address, type, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+        fprintf(trace_noxim,"%d %d %d %d %d %d %016llx %d %08x %08x %08x %08x %08x %08x %08x %08x\n",src_id, -1, 1, 1, 1, req_size, address, type, 0, 0, 0, 0, 0, 0, 0, 0);
+        fprintf(trace_noxim,"%d %d %d %d %d %d %016llx %d %08x %08x %08x %08x %08x %08x %08x %08x\n",src_id, -1, 1, 1, 0, req_size, address, type, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
     }
     else{
-        fprintf(trace_noxim,"%d %d %d %d %d %d %016llx %d %08x %08x %08x %08x %08x %08x %08x %08x\n",src_id, -1, 0, 1, 1, 1, address, type, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
-        fprintf(trace_noxim,"%d %d %d %d %d %d %016llx %d %08x %08x %08x %08x %08x %08x %08x %08x\n",src_id, -1, 0, 1, 0, 1, address, type, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+        fprintf(trace_noxim,"%d %d %d %d %d %d %016llx %d %08x %08x %08x %08x %08x %08x %08x %08x\n",src_id, -1, 0, 1, 1, req_size, address, type, 0, 0, 0, 0, 0, 0, 0, 0);
+        fprintf(trace_noxim,"%d %d %d %d %d %d %016llx %d %08x %08x %08x %08x %08x %08x %08x %08x\n",src_id, -1, 0, 1, 0, req_size, address, type, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
     }
   }
   printf("Transformation Done!\n");

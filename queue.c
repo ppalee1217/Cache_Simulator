@@ -13,7 +13,7 @@ Queue* createQueue(size_t capacity) {
         fprintf(stderr, "Memory allocation error.\n");
         exit(EXIT_FAILURE);
     }
-
+    queue->unsent_req = 0;
     queue->front = 0;
     queue->rear = 0;
     queue->size = 0;
@@ -24,9 +24,12 @@ Queue* createQueue(size_t capacity) {
 
 void enqueue(Queue* queue, traffic_t item) {
     if ((queue->rear + 1) % queue->capacity == queue->front) {
+        printf("front: %d, rear: %d\n", queue->front, queue->rear);
+        printf("capacity: %d, size: %d\n", queue->capacity, queue->size);
         fprintf(stderr, "Queue is full.\n");
         exit(EXIT_FAILURE);
     }
+    queue->unsent_req = queue->unsent_req + 1;
     queue->size = queue->size + 1;
     queue->trafficTable[queue->rear] = item;
     queue->rear = (queue->rear + 1) % queue->capacity;

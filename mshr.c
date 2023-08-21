@@ -90,7 +90,7 @@ int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, uns
     }
     //! Check if there is any empty entry left
     if(empty_entry != -1){
-        // printf("There is empty entry at %d\n", empty_entry);
+        // printf("There is empty entry at %d of MSHR\n", empty_entry);
         queue->mshr[empty_entry].valid = true;
         queue->mshr[empty_entry].issued = false;
         queue->mshr[empty_entry].block_addr = block_addr;
@@ -163,10 +163,13 @@ int mshr_queue_clear_inst(mshr_queue_t* queue, int entries){
       queue->mshr[entries].last_index = index;
       //* Trace traffic of noxim
       if(running_mode == 2){
-        // printf("Traffic %d finished\n", queue->mshr[entries].maf[index].traffic->packet_id);
         queue->mshr[entries].maf[index].traffic->finished = true;
-        printf("Traffic data %x finished\n", queue->mshr[entries].maf[index].traffic->data);
-        // queue->mshr[entries].maf[index].traffic = NULL;
+        if(queue->mshr[entries].maf[index].traffic->req_type)
+            queue->mshr[entries].maf[index].traffic->data = 0xdeadbeef;
+        else
+            queue->mshr[entries].maf[index].traffic->data = 0xabcdef01;
+        printf("(3)Traffic packet id %d finished\n", queue->mshr[entries].maf[index].traffic->packet_id);
+        printf("(3)Req size is %d\n", queue->mshr[entries].maf[index].traffic->req_size);
       }
       if(queue->mshr[entries].maf_used_num==0){
         queue->mshr[entries].valid = false;
@@ -184,10 +187,13 @@ int mshr_queue_clear_inst(mshr_queue_t* queue, int entries){
           queue->mshr[entries].maf_used_num--;
           //* Trace traffic of noxim
           if(running_mode == 2){
-            // printf("Traffic %d finished\n", queue->mshr[entries].maf[j].traffic->packet_id);
             queue->mshr[entries].maf[j].traffic->finished = true;
-            printf("Traffic data %x finished\n", queue->mshr[entries].maf[j].traffic->data);
-            // queue->mshr[entries].maf[j].traffic = NULL;
+            if(queue->mshr[entries].maf[j].traffic->req_type)
+                queue->mshr[entries].maf[j].traffic->data = 0xdeadbeef;
+            else
+                queue->mshr[entries].maf[j].traffic->data = 0xabcdef01;
+            printf("(4)Traffic packet id %d finished\n", queue->mshr[entries].maf[j].traffic->packet_id);
+            printf("(4)Req size is %d\n", queue->mshr[entries].maf[j].traffic->req_size);
           }
           if(queue->mshr[entries].maf_used_num==0){
             queue->mshr[entries].valid = false;

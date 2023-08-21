@@ -31,11 +31,11 @@ typedef struct traffic_t
     int req_size;   // Request read data size (word)
     int src_id;     // Source PE index
     int dst_id;     // Destination PE index (Cache bank index)
-    int packet_id;  // Packet ID
+    uint32_t packet_id;  // Packet ID
     bool valid;     // If traffic is valid
     bool working;   // If traffic is in working process by Cache Simulator
-    bool finished;  // If traffic is finished by Cache Simulator, and can be sent back to Noxim
-    bool noxim_finish; // If process is finished in Noxim
+    bool finished;  // If this traffic is finished by Cache Simulator, and can be sent back to Noxim
+    bool noxim_finish; // If the input process is finished by Noxim
     bool tail;      // If traffic is tail packet
 } traffic_t;
 
@@ -45,6 +45,7 @@ typedef struct Queue{
     uint32_t rear;
     uint32_t capacity;
     uint32_t size;
+    int unsent_req;
 } Queue;
 
 /**
@@ -121,12 +122,12 @@ typedef struct mshr_t
   bool issued;
   bool data_returned;
   unsigned int tag;
-  int index;
   int maf_used_num;
   int maf_size;
   int counter;
   addr_t block_addr;
   maf_t * maf;
+  int index;
   int last_index; // The last cleared MAF request index
 } mshr_t;
 

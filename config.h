@@ -17,7 +17,7 @@
 #define IFETCH 2
 
 // 
-#define DEFAULT_QUEUE_CAPACITY 1000
+#define DEFAULT_QUEUE_CAPACITY 10000
 
 // Mapping mode
 // void setAddrMappingMode(int mode){

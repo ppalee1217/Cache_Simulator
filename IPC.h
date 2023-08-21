@@ -32,16 +32,20 @@
 #define GETREQUEST_SIZE(p) (*(p + 14))
 #define GETTEST(p,pos) (*(p + pos))
 
+
 // Mutex to protect the global parameter
 pthread_mutex_t* mutex;
-packet_data sendBackPacket;
+pthread_mutex_t mutex_sendBack;
+packet_data* sendBackPacket;
+#define SEND_BACK_PACKET_SIZE 1000
 
-void* runCache_noxim(void* arg);
-void* executeRemainTraffic(void* arg);
+void runCache_noxim();
+void executeRemainTraffic();
 void* checkNoC(void* arg);
 void* sentBackToNoC(void* arg);
 char* concatenateStrings(const char* str1, const char* str2);
-void resetsendBackPacket();
+void sendBackPacket_init();
+void resetSendBackPacket(packet_data* packet);
 void transPacketToTraffic(packet_data packet, int id);
 void setIPC_Data(uint32_t *ptr, uint32_t data, int const_pos, int varied_pos);
 void setIPC_Valid(uint32_t *ptr);

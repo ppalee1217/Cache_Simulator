@@ -163,7 +163,12 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         //* Update traffic table status
         if(running_mode == 2){
             traffic->finished = true;
-            printf("Traffic data %x finished\n", traffic->data);
+            if(traffic->req_type)
+                traffic->data = 0xdeadbeef;
+            else
+                traffic->data = 0xabcdef01;
+            printf("(2)Traffic packe id %d finished\n", traffic->packet_id);
+            printf("(2)Req size is %d\n", traffic->req_size);
         }
         return 3;
     }
