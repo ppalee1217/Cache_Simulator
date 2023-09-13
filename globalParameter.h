@@ -3,6 +3,8 @@
 #include "datastruct.h"
 #include "config.h"
 
+#define READ_DATA (uint32_t)0xdeadbeef
+
 extern int addr_mode;
 extern int miss_cycle;
 extern int req_queue_size;
@@ -12,10 +14,7 @@ extern int bank_num;
 extern int block_size;
 extern int cache_size;
 extern int ways;
-
 extern Queue** trafficTableQueue;
 extern int running_mode;
-
-#define INPUT_NUM 1000
 
 #endif

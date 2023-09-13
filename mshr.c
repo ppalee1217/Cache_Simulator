@@ -54,7 +54,7 @@ mshr_t* init_mshr(int entires, int inst_num){
  * @param type is the operation type of the instruction - 0 for load, 1 for store, 2 for instruction read (not used).
  * @return -1 if the MAF is full, 0 if the MSHR is full, 1 if the request is not in MSHR, 2 if the request is in MSHR and MAF is not full.
  */
-int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination, int tag, int req_number_on_trace, int index, traffic_t* traffic){
+int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long addr, unsigned int type, unsigned int block_offset, unsigned int destination, int tag, int req_number_on_trace, int index, traffic_t* traffic){
   if(queue->enable_mshr){
     int empty_entry = -1;
     //* Search if there exist MSHR entry has isseued to the same tag
@@ -93,7 +93,9 @@ int mshr_queue_get_entry(mshr_queue_t* queue, unsigned long long block_addr, uns
         // printf("There is empty entry at %d of MSHR\n", empty_entry);
         queue->mshr[empty_entry].valid = true;
         queue->mshr[empty_entry].issued = false;
-        queue->mshr[empty_entry].block_addr = block_addr;
+        queue->mshr[empty_entry].addr = addr;
+        // printf("\n\n\n\nMSHR logged addr %016llx\n\n\n\n", addr);
+        // getchar();
         queue->mshr[empty_entry].tag = tag;
         queue->mshr[empty_entry].index = index;
         queue->mshr[empty_entry].maf[0].valid = true;
@@ -164,12 +166,12 @@ int mshr_queue_clear_inst(mshr_queue_t* queue, int entries){
       //* Trace traffic of noxim
       if(running_mode == 2){
         queue->mshr[entries].maf[index].traffic->finished = true;
+        // if(queue->mshr[entries].maf[index].traffic->tensor_id==2 || queue->mshr[entries].maf[index].traffic->tensor_id==5 || queue->mshr[entries].maf[index].traffic->tensor_id==8 || queue->mshr[entries].maf[index].traffic->tensor_id==11)
+        //     printf("(3)tensor id %d is finished\n", queue->mshr[entries].maf[index].traffic->tensor_id);
+        // printf("(3)Traffic packet id %d finished, flit wd num = %d\n", queue->mshr[entries].maf[index].traffic->packet_id, queue->mshr[entries].maf[index].traffic->flit_word_num);
         if(queue->mshr[entries].maf[index].traffic->req_type)
-            queue->mshr[entries].maf[index].traffic->data = 0xdeadbeef;
-        else
-            queue->mshr[entries].maf[index].traffic->data = 0xabcdef01;
-        printf("(3)Traffic packet id %d finished\n", queue->mshr[entries].maf[index].traffic->packet_id);
-        printf("(3)Req size is %d\n", queue->mshr[entries].maf[index].traffic->req_size);
+            for(int i =0;i<queue->mshr[entries].maf[index].traffic->flit_word_num;i++)
+                queue->mshr[entries].maf[index].traffic->data[i] = READ_DATA;
       }
       if(queue->mshr[entries].maf_used_num==0){
         queue->mshr[entries].valid = false;
@@ -188,12 +190,12 @@ int mshr_queue_clear_inst(mshr_queue_t* queue, int entries){
           //* Trace traffic of noxim
           if(running_mode == 2){
             queue->mshr[entries].maf[j].traffic->finished = true;
+            // if(queue->mshr[entries].maf[j].traffic->tensor_id==2 || queue->mshr[entries].maf[j].traffic->tensor_id==5 || queue->mshr[entries].maf[j].traffic->tensor_id==8 || queue->mshr[entries].maf[j].traffic->tensor_id==11)
+            //     printf("(4)tensor id %d is finished\n", queue->mshr[entries].maf[j].traffic->tensor_id);
+            // printf("(4)Traffic packet id %d finished\n", queue->mshr[entries].maf[j].traffic->packet_id);
             if(queue->mshr[entries].maf[j].traffic->req_type)
-                queue->mshr[entries].maf[j].traffic->data = 0xdeadbeef;
-            else
-                queue->mshr[entries].maf[j].traffic->data = 0xabcdef01;
-            printf("(4)Traffic packet id %d finished\n", queue->mshr[entries].maf[j].traffic->packet_id);
-            printf("(4)Req size is %d\n", queue->mshr[entries].maf[j].traffic->req_size);
+                for(int i =0;i<queue->mshr[entries].maf[j].traffic->flit_word_num;i++)
+                    queue->mshr[entries].maf[j].traffic->data[i] = READ_DATA;
           }
           if(queue->mshr[entries].maf_used_num==0){
             queue->mshr[entries].valid = false;
@@ -210,7 +212,7 @@ int mshr_queue_clear_inst(mshr_queue_t* queue, int entries){
 }
 
 //* Return the logged MAF entry index
-int log_maf_queue(int mshr_index, mshr_queue_t* queue, unsigned long long block_addr, unsigned int type, unsigned int block_offset, unsigned int destination, int tag, traffic_t* traffic){
+int log_maf_queue(int mshr_index, mshr_queue_t* queue, unsigned long long addr, unsigned int type, unsigned int block_offset, unsigned int destination, int tag, traffic_t* traffic){
   for(int j = 0; j<queue->mshr[mshr_index].maf_size;j++){
     if(!queue->mshr[mshr_index].maf[j].valid){
       //! MAF is not full

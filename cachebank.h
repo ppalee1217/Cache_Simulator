@@ -12,6 +12,7 @@
 #include "cacheset.h"
 #include "datastruct.h"
 #include "config.h"
+#include "utils.h"
 
 extern cache_t* cache;         // Data structure for the cache
 extern int cache_block_size;         // Block size
@@ -33,12 +34,13 @@ extern counter_t stall_MSHR;         // Total number of stalls due to MSHR
 extern counter_t stall_RequestQueue; // Total number of stalls due to Request Queue
 extern counter_t MSHR_used_times;    // Total number of MSHR used times
 extern counter_t MAF_used_times;     // Total number of MAF used times
-extern bool enable;              // Enable debug mode
+extern bool enable;                 // Enable debug mode
 
 //! For NOXIM
 extern bool noxim_finish;  // Indicate if NOXIM input is finish
 extern bool cache_finish;  // Indicate if cache finish all request
-extern bool noc_finish[4]; // Indicate if noc finish all sent back request
+extern bool noc_finish[NIC_NUM]; // Indicate if noc finish all sent back request
+ // Indicate which tensor is finished
 
 // Running mode
 void fedByTrace();
@@ -55,8 +57,6 @@ bool req_queue_empty(request_queue_t *request_queue);
 void req_send_to_set(cache_t *cache, request_queue_t *request_queue, cache_bank_t *cache_bank, int choose);
 void req_queue_forward(request_queue_t *request_queue);
 // Function
-void cache_print_stats(void);
 int next_line(FILE* trace);
 int checkTrafficTable(Queue* trafficTable, int nic_id);
-FILE *open_trace(const char *filename);
 #endif

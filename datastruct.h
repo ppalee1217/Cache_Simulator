@@ -12,31 +12,44 @@
 typedef unsigned long long addr_t;		// Data type to hold addresses
 typedef unsigned long long counter_t; // Data type to hold cache statistic variables
 
-typedef struct packet_data{
-    uint32_t src_id;
-    uint32_t dst_id;
-    uint32_t packet_id;
-    uint32_t req[2];
-    uint32_t data[8];
-    uint32_t read;
-    uint32_t request_size;
-    bool finish;
-} packet_data;
+typedef struct tensorDependcy {
+    int tensor_id;
+    int packet_count;
+    bool return_flag;
+} tensorDependcy;
+
+
+typedef struct Packet{
+    int src_id;
+    int dst_id;
+    int packet_size;    // Flit number of this packet
+    int packet_num; // Info Cache/PE that how many packets will be issued for this request(tensor)
+    uint32_t packet_id;      // The packet ID
+    int tensor_id;
+    int* req_type;      // 1: read, 0: write
+    int* flit_word_num;
+    uint64_t* addr;
+    int** data;
+} Packet;
 
 typedef struct traffic_t
 {
     addr_t addr;    // Address to be accessed
-    uint32_t data;   // Data to be written (*4)
+    int* data;      // Data to be written/read
     int req_type;   // Request type (0: read, 1: write)
-    int req_size;   // Request read data size (word)
     int src_id;     // Source PE index
     int dst_id;     // Destination PE index (Cache bank index)
-    uint32_t packet_id;  // Packet ID
+    int packet_size;    // Flit number of this packet
+    int sequence_no;    // Sequence number of this flit
+    uint32_t packet_id;  // The packet ID
+    int tensor_id;
+    int packet_num;
+    int flit_word_num;
+    //* For CacheSim processing
     bool valid;     // If traffic is valid
     bool working;   // If traffic is in working process by Cache Simulator
     bool finished;  // If this traffic is finished by Cache Simulator, and can be sent back to Noxim
-    bool noxim_finish; // If the input process is finished by Noxim
-    bool tail;      // If traffic is tail packet
+    bool tail;      // If traffic is tail flit of a packet
 } traffic_t;
 
 typedef struct Queue{
@@ -60,7 +73,7 @@ typedef struct request_queue_t
 	int *req_number_on_trace;
 	int queue_size;
 	int req_num;
-    traffic_t **traffic;
+    traffic_t** traffic;
 } request_queue_t;
 
 /**
@@ -125,8 +138,8 @@ typedef struct mshr_t
   int maf_used_num;
   int maf_size;
   int counter;
-  addr_t block_addr;
-  maf_t * maf;
+  addr_t addr;
+  maf_t *maf;
   int index;
   int last_index; // The last cleared MAF request index
 } mshr_t;
@@ -136,7 +149,7 @@ typedef struct mshr_queue_t
   bool enable_mshr;
   int entries;
   int bank_num;
-  mshr_t * mshr;
+  mshr_t *mshr;
 } mshr_queue_t;
 
 /**

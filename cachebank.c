@@ -2,17 +2,21 @@
 
 traffic_t* traffic_init(){
     traffic_t* traffic = (traffic_t*) malloc(sizeof(traffic_t));
+    traffic->data = (int*) malloc(MAX_FLIT_WORDSIZE*sizeof(int));
     traffic->addr = 0;
-    traffic->data = 0;
     traffic->req_type = 0;
-    traffic->req_size = 0;
     traffic->src_id = 0;
     traffic->dst_id = 0;
+    traffic->packet_size = 0;
+    traffic->sequence_no = -1;
     traffic->packet_id = 0;
+    traffic->tensor_id = 0;
+    traffic->packet_num = 0;
+    traffic->flit_word_num = 0;
     traffic->valid = false;
     traffic->working = false;
     traffic->finished = false;
-    traffic->noxim_finish = false;
+    traffic->tail = false;
     return traffic;
 }
 
@@ -114,18 +118,18 @@ void req_send_to_set(cache_t* cache, request_queue_t* request_queue, cache_bank_
             cache_bank[choose].stall_counter++;
             // * Miss data returned, load data to cache
             if(cache_bank[choose].stall_counter == miss_cycle){
-                printf("Stall request is back, load data to cache\n");
+                // printf("Stall request is back, load data to cache\n");
                 cache_bank[choose].stall = false;
                 cache_bank[choose].stall_counter = 0;
                 cacheset_load_MSHR_data(cache_bank[choose].set_num, choose, cache, cache_bank[choose].cache_set, cache_bank[choose].stall_addr, cache_bank[choose].inst_type, &writebacks, &non_dirty_replaced, addr_mode, 0);
                 if(running_mode == 2){
                     cache_bank[choose].stall_traffic->finished = true;
+                    // if(cache_bank[choose].stall_traffic->tensor_id==2 || cache_bank[choose].stall_traffic->tensor_id==5 || cache_bank[choose].stall_traffic->tensor_id==8 || cache_bank[choose].stall_traffic->tensor_id==11)
+                    //     printf("(1)tensor id %d is finished\n", cache_bank[choose].stall_traffic->tensor_id);
+                    // printf("(1)Traffic packet id %d finished\n", cache_bank[choose].stall_traffic->packet_id);
                     if(cache_bank[choose].stall_traffic->req_type)
-                        cache_bank[choose].stall_traffic->data = 0xdeadbeef;
-                    else
-                        cache_bank[choose].stall_traffic->data = 0xabcdef01;
-                    printf("(1)Traffic packet id %d finished\n", cache_bank[choose].stall_traffic->packet_id);
-                    printf("(1)Req size is %d\n", cache_bank[choose].stall_traffic->req_size);
+                        for(int i =0;i<cache_bank[choose].stall_traffic->flit_word_num;i++)
+                            cache_bank[choose].stall_traffic->data[i] = READ_DATA;
                 }
                 req_queue_forward(request_queue);
             }
@@ -133,7 +137,7 @@ void req_send_to_set(cache_t* cache, request_queue_t* request_queue, cache_bank_
         return;
     }
     else{
-        printf("Cache bank %d is not stalling\n", choose);
+        // printf("Cache bank %d is not stalling\n", choose);
         unsigned int index = 0;
         for(int i=0;i<cache_num_index_bits;i++){
             index = (index << 1) + 1;
@@ -147,10 +151,10 @@ void req_send_to_set(cache_t* cache, request_queue_t* request_queue, cache_bank_
         offset = ((request_queue->request_addr[0] >> 2) & offset);
         // Check if the request queue is empty
         if(!req_queue_empty(request_queue)){
-            printf("(Bank%d) Send request to cache set\n",choose);
+            // printf("(Bank%d) Send request to cache set\n",choose);
             int maf_result = cacheset_access(cache_bank[choose].cache_set, cache, choose, request_queue->request_addr[0], request_queue->request_type[0], 0, &hits, &misses, &writebacks, addr_mode, request_queue->req_number_on_trace[0], request_queue->traffic[0]);
             // printf("Cacheset back!\n");
-            printf("(Bank%d) MAF result = %d\n",choose, maf_result);
+            // printf("(Bank%d) MAF result = %d\n",choose, maf_result);
             // Check the MSHR Queue
             if(maf_result == 3){
                 // * hit
@@ -218,15 +222,6 @@ void req_send_to_set(cache_t* cache, request_queue_t* request_queue, cache_bank_
     }
 }
 
-
-/**
- * Function to open the trace file
- * You do not need to update this function. 
- */
-FILE *open_trace(const char *filename) {
-    return fopen(filename, "r");
-}
-
 /**
  * Read the global traffic table and check if there is any request to be issued to the cache.
  * 
@@ -241,15 +236,21 @@ int checkTrafficTable(Queue* trafficTable, int nic_id){
     }
     else{
         int index = -1;
-        for(int i=trafficTable->front;i<=trafficTable->rear;i++){
+        int tmp_rear;
+        (trafficTable->rear < trafficTable->front) ? (tmp_rear = trafficTable->rear + trafficTable->capacity) : (tmp_rear = trafficTable->rear);
+        for(int i=trafficTable->front;i<=tmp_rear;i++){
+            i%=trafficTable->capacity;
             if(trafficTable->trafficTable[i].valid && !trafficTable->trafficTable[i].working){
                 index = i;
                 break;
             }
         }
         if(index == -1){
-            printf("Error! There is no unsent request to be handled.\n");
-            getchar();
+            for(int i=trafficTable->front;i<=trafficTable->rear;i++){
+                printf("Traffic %d: valid = %d, working = %d, finished = %d, tail = %d\n", i, trafficTable->trafficTable[i].valid, trafficTable->trafficTable[i].working, trafficTable->trafficTable[i].finished, trafficTable->trafficTable[i].tail);
+            }
+            printf("Error! There is no unsent request to be handled for queue %d.\n", nic_id);
+            exit(EXIT_FAILURE);
         }
         traffic_t* traffic = &(trafficTable->trafficTable[index]);
         if(traffic->valid && !traffic->working){
@@ -263,10 +264,10 @@ int checkTrafficTable(Queue* trafficTable, int nic_id){
             }
             cache_set_index = ((traffic->addr >> (cache_num_offset_bits+2)) & index_mask);
             tag = (traffic->addr >> (cache_num_offset_bits+2+cache_num_index_bits));
-            // printf("Traffic addr = %016llx\n", traffic->addr);
             // printf("Cache set index = %x\n", cache_set_index);
             // printf("Cache num offset bits = %d\n", cache_num_offset_bits);
             // printf("Cache num index bits = %d\n", cache_num_index_bits);
+            // printf("Traffic addr = %016llx\n", traffic->addr);
             // printf("Traffic tag = %x\n", tag);
             // getchar();
             if(addr_mode == 0){
@@ -284,7 +285,7 @@ int checkTrafficTable(Queue* trafficTable, int nic_id){
             else if(addr_mode == 1){
                 unsigned int address_partition = ((unsigned int)-1) / bank_num;
                 int choose_bank = (traffic->addr / address_partition);
-                printf("Choose bank = %d\n", choose_bank);
+                // printf("Choose bank = %d\n", choose_bank);
                 if(req_queue_full(cache->cache_bank[choose_bank].request_queue)){
                     return 2;
                 }
@@ -295,7 +296,7 @@ int checkTrafficTable(Queue* trafficTable, int nic_id){
                 trafficTable->unsent_req = trafficTable->unsent_req - 1;
             }
             else if(addr_mode == 2){
-                // TODO
+                // TODO: add new address mode
             }
             accesses++;
         }

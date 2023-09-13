@@ -1,20 +1,4 @@
 #include "cacheset.h"
-/**
- * Function to perform a very basic log2. It is not a full log function, 
- * but it is all that is needed for this assignment. The <math.h> log
- * function causes issues for some people, so we are providing this. 
- * 
- * @param x is the number you want the log of.
- * @returns Techinically, floor(log_2(x)). But for this lab, x should always be a power of 2.
- */
-int simple_log_2(int x) {
-    int val = 0;
-    while (x > 1) {
-        x /= 2;
-        val++;
-    }
-    return val; 
-}
 
 int cache_set_size;     // Cache size
 int num_sets;           // Number of sets
@@ -163,12 +147,12 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         //* Update traffic table status
         if(running_mode == 2){
             traffic->finished = true;
+            // printf("(2)Traffic packet id %d finished, flit wd num = %d\n", traffic->packet_id, traffic->flit_word_num);
+            // if(traffic->tensor_id==2 || traffic->tensor_id==5 || traffic->tensor_id==8 || traffic->tensor_id==11)
+            //     printf("(2)tensor id %d is finished\n", traffic->tensor_id);
             if(traffic->req_type)
-                traffic->data = 0xdeadbeef;
-            else
-                traffic->data = 0xabcdef01;
-            printf("(2)Traffic packe id %d finished\n", traffic->packet_id);
-            printf("(2)Req size is %d\n", traffic->req_size);
+                for(int i =0;i<traffic->flit_word_num;i++)
+                    traffic->data[i] = READ_DATA;
         }
         return 3;
     }
@@ -197,6 +181,7 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
 }
 
 void cacheset_load_MSHR_data(int set_num, int choose, cache_t* cache,cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced, int mode, int req_number_on_trace){
+    // printf("Load MSHR return data of addr %016llx\n", physical_addr);
     bool replace_block;
     unsigned int offset = 0;
     unsigned int index = 0;

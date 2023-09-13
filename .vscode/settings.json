@@ -4,6 +4,8 @@
     "cstdint": "c",
     "cstdio": "c",
     "type_traits": "c",
-    "string.h": "c"
+    "string.h": "c",
+    "stdlib.h": "c",
+    "cstdlib": "c"
 }
 }

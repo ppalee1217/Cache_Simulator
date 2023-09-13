@@ -1,5 +1,5 @@
 # Specify the source files and their corresponding object files
-SRCS = queue.c lrustack.c mshr.c cacheset.c cachebank.c main.c
+SRCS = queue.c utils.c lrustack.c mshr.c cacheset.c cachebank.c main.c
 OBJS = $(patsubst %.c, build/%.o, $(SRCS))
 
 # Default target: build cachesim executable
