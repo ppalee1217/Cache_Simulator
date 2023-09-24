@@ -64,7 +64,6 @@ typedef struct Queue{
 /**
  * Struct for a request queue.
  */
-
 typedef struct request_queue_t
 {
 	addr_t *request_addr;
@@ -86,7 +85,6 @@ typedef struct request_queue_t
 typedef struct lru_stack_t
 {
     int size; // Corresponds to the associativity
-    // TODO: Add anything else needed to maintain a LRU Stack (ex: priority bits?).
     int *priority;    // Change according to update freq
                       // If index not match, add everytime cache set update
                       // the biggest number should be replaced if stack full
@@ -94,9 +92,8 @@ typedef struct lru_stack_t
 
 /**
  * Struct for a cache block. Feel free to change any of this if you want.
+ * One cache block has a tag, valid bit, and dirty bit (& data in hardware implementation)
  */
-
-// 1 cache block has a tag, valid bit, and dirty bit (& data in hardware implementation)
 typedef struct cache_block_t
 {
 	int tag;
@@ -106,9 +103,8 @@ typedef struct cache_block_t
 
 /**
  * Struct for a cache set.
+ * One cache set has N-cache line, and a stack to keep track of LRU
  */
-
-// 1 cache set has n cache line, and a stack to keep track of LRU
 typedef struct cache_set_t
 {
 	int size;				// Number of blocks in this cache set
@@ -155,7 +151,6 @@ typedef struct mshr_queue_t
 /**
  * Struct for a cache bank.
  */
-
 typedef struct cache_bank_t
 {
 	cache_set_t *cache_set;
@@ -167,10 +162,12 @@ typedef struct cache_bank_t
 	addr_t stall_addr;
 	unsigned int stall_tag;
     traffic_t* stall_traffic;
+
 	// * For non-MSHR design
 	int stall_counter;
 	int inst_type;
-	// ! For statistics per bank
+
+	// * For statistics per bank
 	counter_t access_num;
 	counter_t hit_num;
 	counter_t miss_num;
@@ -183,7 +180,6 @@ typedef struct cache_bank_t
 /**
  * Struct for a cache.
  */
-
 typedef struct cache_t
 {
 	cache_bank_t *cache_bank;

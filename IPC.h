@@ -13,6 +13,8 @@
 #include <unistd.h>
 #include "datastruct.h"
 
+#define SEND_BACK_PACKET_SIZE 1000
+
 #define SHM_SIZE 8192
 #define SHM_NAME "cache_nic"
 #define CHECKREADY(p)               ((*p >> 31) & 0b1)
@@ -32,8 +34,9 @@
 // Mutex to protect the global parameter
 pthread_mutex_t* mutex;
 pthread_mutex_t mutex_sendBack;
+
+// Buffer to store the packet sent back to NoC
 Packet* sendBackPacket;
-#define SEND_BACK_PACKET_SIZE 1000
 
 void runCache_noxim();
 void executeRemainTraffic();

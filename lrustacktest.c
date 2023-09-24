@@ -2,6 +2,8 @@
  * @author ECE 3058 TAs
  */
 
+//! This file is for testing LRU stack implementation correctness.
+
 #include <stdio.h>
 #include "lrustack.h"
 

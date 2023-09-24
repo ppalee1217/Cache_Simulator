@@ -1,68 +1,63 @@
-Sample Commands and Expected Outputs
-
-Compile with:
-gcc config.h lrustack.h lrustack.c mshr.h mshr.c cacheset.h cacheset.c cachebank.h cachebank.c -o cachesim
-
-access, hits, misses, writebacks
-
-Traces/trace_cache.txt 32 65536 8
 (0) Trend test
-./cachesim Traces/trend_trace/trace.loop.txt 32 65536 8
-./cachesim Traces/trend_trace/trace.forward.txt 32 65536 8
-./cachesim Traces/trend_trace/trace.random.txt 32 65536 8
-./cachesim Traces/trend_trace/trace.susume2.txt 32 65536 8
+Traces/trend_trace/trace.loop.txt 32 65536 8
+Traces/trend_trace/trace.forward.txt 32 65536 8
+Traces/trend_trace/trace.random.txt 32 65536 8
+Traces/trend_trace/trace.susume2.txt 32 65536 8
 
 (0) Bank test
-./cachesim Traces/trend_trace/trace.bank_test.txt 32 65536 8
-./cachesim Traces/trend_trace/trace.bank_test2.txt 32 65536 8
+Traces/trend_trace/trace.bank_test.txt 32 65536 8
+Traces/trend_trace/trace.bank_test2.txt 32 65536 8
 
 (0) Simple test
-./cachesim Traces/simple_trace/simple_MAF_test.trace.txt 32 65536 8
-./cachesim Traces/simple_trace/simple_cycle_test1.trace.txt 32 65536 8
-./cachesim Traces/simple_trace/simple_cycle_test2.trace.txt 32 65536 8
-./cachesim Traces/simple_trace/simple_cycle_test3.trace.txt 32 65536 8
-./cachesim Traces/simple_trace/simple_cycle_test4.trace.txt 32 65536 8
-./cachesim Traces/simple_trace/simple_MSHR_stall_test.trace.txt 32 65536 8
-./cachesim Traces/simple_trace/simple_MSHR_used_test.trace.txt 32 65536 8
-./cachesim Traces/simple_trace/simple_MAF_used_test.trace.txt 32 65536 8
-./cachesim Traces/simple_trace/simple_writebacks_test.trace.txt 32 65536 8
-./cachesim Traces/simple_trace/simple_non_dirty_test.trace.txt 32 65536 8
+Traces/simple_trace/simple_MAF_test.trace.txt 32 65536 8
+Traces/simple_trace/simple_cycle_test1.trace.txt 32 65536 8
+Traces/simple_trace/simple_cycle_test2.trace.txt 32 65536 8
+Traces/simple_trace/simple_cycle_test3.trace.txt 32 65536 8
+Traces/simple_trace/simple_cycle_test4.trace.txt 32 65536 8
+Traces/simple_trace/simple_MSHR_stall_test.trace.txt 32 65536 8
+Traces/simple_trace/simple_MSHR_used_test.trace.txt 32 65536 8
+Traces/simple_trace/simple_MAF_used_test.trace.txt 32 65536 8
+Traces/simple_trace/simple_writebacks_test.trace.txt 32 65536 8
+Traces/simple_trace/simple_non_dirty_test.trace.txt 32 65536 8
+
+Sample Commands and Expected Outputs
+access, hits, misses, writebacks
 
 (1) Merge
 
-./cachesim Traces/debug_trace/trace.merge.txt 32 65536 8
+Traces/debug_trace/trace.merge.txt 32 65536 8
 1048575, 1038446, 10129, 3058
 
-./cachesim Traces/trace.merge.txt 32 65536 4
+Traces/trace.merge.txt 32 65536 4
 1048575, 1038179, 10396, 3130
 
-./cachesim Traces/trace.merge.txt 64 65536 4
+Traces/trace.merge.txt 64 65536 4
 1048575, 1042197, 6378, 1870
 
 
 (2) Random 64K
 
-./cachesim Traces/trace.random64k.txt 32 65536 8
+Traces/trace.random64k.txt 32 65536 8
 262144, 260096, 2048, 0
 
-./cachesim Traces/trace.random64k.txt 32 65536 4
+Traces/trace.random64k.txt 32 65536 4
 262144, 260096, 2048, 0
 
-./cachesim Traces/trace.random64k.txt 64 65536 4
+Traces/trace.random64k.txt 64 65536 4
 262144, 261120, 1024, 0
 
 
 (3) gcc
 
-./cachesim Traces/trace.gcc.txt 32 65536 8
+Traces/trace.gcc.txt 32 65536 8
 1000000, 994989, 5011, 1810
 
-./cachesim Traces/trace.gcc.txt 32 65536 4
+Traces/trace.gcc.txt 32 65536 4
 1000000, 994415, 5585, 1801
 
-./cachesim Traces/trace.gcc.txt 64 65536 4
+Traces/trace.gcc.txt 64 65536 4
 1000000, 995971, 4029, 1132
 
 (4)
 
-./cachesim Traces/trace.MSHR_test.txt 4 32 4
+Traces/trace.MSHR_test.txt 4 32 4

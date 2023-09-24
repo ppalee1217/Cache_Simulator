@@ -8,6 +8,7 @@ int counter = 0;
 int counter2 = 0;
 int counter_tmp = 0;
 int counter2_tmp = 0;
+
 /**
  * Function to intialize your cache simulator with the given cache parameters. 
  * Note that we will only input valid parameters and all the inputs will always 
@@ -67,35 +68,35 @@ cache_set_t* cacheset_init(int _block_size, int _cache_size, int _ways) {
  * @return maf result.
  */
 int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t physical_addr, int access_type, unsigned int destination, counter_t* hits, counter_t* misses, counter_t* writebacks, int mode, int req_number_on_trace, traffic_t* traffic) {
-    // addr_t is a 32-bit unsigned integer.
-    // Encoding:
-    // [1:0]                                      : Byte offset
-    // [num_offset_bits + 1: 2]                   : Data to fetch in cache block(if cache block size > 1 word)
-    // [num_offset_bits + num_index_bits + 1: num_offset_bits + 2] : Cache set index
-    // [31: num_offset_bits + num_index_bits + 2] : Tag
-
-    // 1.
-    // Read access type:
-    // Distinguish between data read, data write, and instruction fetch
-
-    // 2.
-    // First, find cache set from [num_offset_bits + num_index_bits + 1: num_offset_bits + 2]
-    // if the cache set is n-way, compare n cache blocks' tag with [64: num_offset_bits + num_index_bits + 2]
-
-    // 3.
-    // When read/write data, update LRU stack by lru_stack_set_mru
-    // we need to compare if the data is already in one of the cache blocks
-    // If so, pass the index of the block to lru_stack_set_mru
-    // If not, pass the index of not valid block to lru_stack_set_mru
-    // If cache set is full, e.g, every block inside it is valid
-    // get the LRU block index from lru_stack_get_lru
-    // and then replace the LRU block with the new block
-    //
-    // Note: issue to concern when replacing the LRU block
-    // if the LRU block is dirty, we need to write back to memory first before replacing it
-    // (1) Read data: need to use block index to choose which block portion to be read
-    // (2) Write data: need to update dirty bit
-    // (3) Inst. read: (not support if time is short)
+    //* addr_t is a 64-bit unsigned integer.
+    //* Encoding:
+    //* [1:0]                                      : Byte offset
+    //* [num_offset_bits + 1: 2]                   : Data to fetch in cache block(if cache block size > 1 word)
+    //* [num_offset_bits + num_index_bits + 1: num_offset_bits + 2] : Cache set index
+    //* [63: num_offset_bits + num_index_bits + 2] : Tag
+*
+    //* 1.
+    //* Read access type:
+    //* Distinguish between data read, data write, and instruction fetch
+*
+    //* 2.
+    //* First, find cache set from [num_offset_bits + num_index_bits + 1: num_offset_bits + 2]
+    //* if the cache set is n-way, compare n cache blocks' tag with [63: num_offset_bits + num_index_bits + 2]
+*
+    //* 3.
+    //* When read/write data, update LRU stack by lru_stack_set_mru
+    //* we need to compare if the data is already in one of the cache blocks
+    //* If so, pass the index of the block to lru_stack_set_mru
+    //* If not, pass the index of not valid block to lru_stack_set_mru
+    //* If cache set is full, e.g, every block inside it is valid
+    //* get the LRU block index from lru_stack_get_lru
+    //* and then replace the LRU block with the new block
+    //*
+    //* Note: issue to concern when replacing the LRU block
+    //* if the LRU block is dirty, we need to write back to memory first before replacing it
+    //* (1) Read data: need to use block index to choose which block portion to be read
+    //* (2) Write data: need to update dirty bit
+    //* (3) Inst. read: (not support if time is short)
 
     unsigned int offset = 0;
     unsigned int index = 0;
@@ -108,7 +109,7 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
     }
     offset = ((physical_addr >> 2) & offset);
     index = ((physical_addr >> (num_offset_bits+2)) & index);
-    //* Setting the index when address mapping mode = 0 
+    // Setting the index when address mapping mode = 0 
     if(mode == 0)
         index /= cache->bank_size;
     tag = (physical_addr >> (num_index_bits + num_offset_bits + 2));
@@ -119,8 +120,8 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         if(cache_set[index].blocks[i].tag == tag && cache_set[index].blocks[i].valid){
             hit = true;
             hit_index = i;
-            //* One scenario is that this cache line is sent back recently, and its MAF queue might not be cleared yet
-            //* In this case, the request needs to send to MAF queue first
+            // One scenario is that this cache line is sent back recently, and its MAF queue might not be cleared yet
+            // In this case, the request needs to send to MAF queue first
             if(cache->cache_bank[choose].mshr_queue->enable_mshr){
                 int mshr_index = mshr_queue_check_exist(cache->cache_bank[choose].mshr_queue, tag, index);
                 if(mshr_index != -1){
@@ -134,7 +135,6 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         }
     }
     if(hit){
-        // printf("Hit!\n");
         // hit
         *hits = *hits + 1;
         // Read: consider block index
@@ -147,9 +147,6 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         //* Update traffic table status
         if(running_mode == 2){
             traffic->finished = true;
-            // printf("(2)Traffic packet id %d finished, flit wd num = %d\n", traffic->packet_id, traffic->flit_word_num);
-            // if(traffic->tensor_id==2 || traffic->tensor_id==5 || traffic->tensor_id==8 || traffic->tensor_id==11)
-            //     printf("(2)tensor id %d is finished\n", traffic->tensor_id);
             if(traffic->req_type)
                 for(int i =0;i<traffic->flit_word_num;i++)
                     traffic->data[i] = READ_DATA;
@@ -160,10 +157,7 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
         if(cache->cache_bank[choose].mshr_queue->enable_mshr){
             int mshr_status;
             //* For traffic trace
-            // if(running_mode == 2)
             mshr_status = mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination, tag, req_number_on_trace, index, traffic);
-            // else
-            //     mshr_status = mshr_queue_get_entry(cache->cache_bank[choose].mshr_queue, physical_addr, access_type, offset, destination, tag, req_number_on_trace, index, NULL);
             if (!(mshr_status == 0 || mshr_status == -1)){
                 // miss
                 *misses = *misses + 1;
@@ -181,7 +175,6 @@ int cacheset_access(cache_set_t* cache_set, cache_t* cache, int choose,  addr_t 
 }
 
 void cacheset_load_MSHR_data(int set_num, int choose, cache_t* cache,cache_set_t* cache_set, addr_t physical_addr, int access_type, counter_t* writebacks, counter_t* non_dirty_replaced, int mode, int req_number_on_trace){
-    // printf("Load MSHR return data of addr %016llx\n", physical_addr);
     bool replace_block;
     unsigned int offset = 0;
     unsigned int index = 0;

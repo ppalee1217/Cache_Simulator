@@ -13,14 +13,15 @@
 #include "config.h"
 
 #define NEW2D(H, W, TYPE) (TYPE **)new2d(H, W, sizeof(TYPE))
+
 extern cache_t* cache;         // Data structure for the cache
-// Statistics to keep track.
+//* Statistics to keep track.
 extern counter_t accesses;     // Total number of cache accesses
 extern counter_t hits;         // Total number of cache hits
 extern counter_t misses;       // Total number of cache misses
 extern counter_t writebacks;   // Total number of writebacks
 extern counter_t cycles;       // Total number of cycles
-// * Added statistics
+//* Added statistics
 extern counter_t non_dirty_replaced; // Total number of replaced cache sets(not dirty)
 extern counter_t stall_MSHR;         // Total number of stalls due to MSHR
 extern counter_t stall_RequestQueue; // Total number of stalls due to Request Queue

@@ -4,15 +4,16 @@
 #include "datastruct.h"
 #include "config.h"
 
-cache_t* cache;         // Data structure for the cache
-int cache_block_size;         // Block size
-int cache_num_sets;           // Number of sets
-int cache_ways;               // cache_ways
-int cache_num_offset_bits;    // Number of block bits
-int cache_num_index_bits;     // Number of cache_set_index bits
+cache_t* cache;                       // Data structure for the cache
+int cache_block_size;                 // Block size
+int cache_num_sets;                   // Number of sets
+int cache_ways;                       // cache_ways
+int cache_num_offset_bits;            // Number of block bits
+int cache_num_index_bits;             // Number of cache_set_index bits
 unsigned long long file_pointer_temp; // Temp file pointer for trace file
 int req_number_on_trace = 0;
-// Statistics to keep track.
+
+//* Statistics to keep track.
 counter_t accesses = 0;     // Total number of cache accesses
 counter_t hits = 0;         // Total number of cache hits
 counter_t misses = 0;       // Total number of cache misses
@@ -25,13 +26,15 @@ counter_t stall_RequestQueue = 0; // Total number of stalls due to Request Queue
 counter_t MSHR_used_times = 0;    // Total number of MSHR used times
 counter_t MAF_used_times = 0;     // Total number of MAF used times
 bool enable = false;              // Enable debug mode
-//! For NOXIM
+
+//* For Noxim
 Queue** trafficTableQueue;
 bool noxim_finish = false;  // Indicate if NOXIM input is finish
 bool cache_finish = false;  // Indicate if cache finish all request
 bool trafficTable_finish = true; // Indicate if traffic table finish all request
 bool noc_finish[NIC_NUM]; // Indicate if noc finish all sent back request
-//! Global parameters
+
+//* Global parameters
 int addr_mode;
 int miss_cycle;
 int req_queue_size;
@@ -41,11 +44,12 @@ int bank_num;
 int block_size;
 int cache_size;
 int ways;
-//! Running mode
+
+//* Running mode
 int running_mode;
-//! Traffic Queue number
+//* Traffic Queue number
 int traffic_queue_num;
-//! Dependency Table
+//* Dependency Table
 int Finish_tensorID[FIN_TENSOR_NUM] = {29, 32, 35, 38};
 tensorDependcy** tensorDependencyTable;
 int sendback_count[2] = {0, 0};
@@ -163,7 +167,6 @@ void fedByTrace(){
 void fedByNoxim(){
     //* trafficTableQueue multiple thread protection is not implemented yet
     printf("Running in Noxim mode.\n");
-    // if(bank_num >= 4){
     traffic_queue_num = NIC_NUM;
     mutex = (pthread_mutex_t*)malloc(NIC_NUM*sizeof(pthread_mutex_t));
     trafficTableQueue = (Queue**)malloc(NIC_NUM*sizeof(Queue*));
@@ -172,18 +175,6 @@ void fedByNoxim(){
         pthread_mutex_init(&mutex[i], NULL);
         trafficTableQueue[i] = createQueue(DEFAULT_QUEUE_CAPACITY);
     }
-    // }
-    // else{
-    //     for(int i=3;i>=bank_num;i--)
-    //         noc_finish[i] = true;
-    //     mutex = (pthread_mutex_t*)malloc(bank_num*sizeof(pthread_mutex_t));
-    //     traffic_queue_num = bank_num;
-    //     trafficTableQueue = (Queue**)malloc(bank_num*sizeof(Queue*));
-    //     for(int i=0;i<bank_num;i++){
-    //         pthread_mutex_init(&mutex[i], NULL);
-    //         trafficTableQueue[i] = createQueue(DEFAULT_QUEUE_CAPACITY);
-    //     }
-    // }
     tensorDependencyTable = NEW2D(FIN_TENSOR_NUM, NIC_NUM, tensorDependcy);
     for(int i=0;i<FIN_TENSOR_NUM;i++){
         for(int j=0;j<NIC_NUM;j++){
@@ -199,15 +190,9 @@ void fedByNoxim(){
     int* id = (int*) malloc(NIC_NUM*sizeof(int));
     for(int i=0;i<NIC_NUM;i++){
         id[i] = i;
-        pthread_create(&t[i], NULL, checkNoC, (void *)(id+i));  // create reader thread
+        pthread_create(&t[i], NULL, checkNoC, (void *)(id+i));         // create reader thread
         pthread_create(&t[4+i], NULL, sentBackToNoC, (void *)(id+i));  // create writer thread
     }
-    // pthread_create(&t2, NULL, checkNoC, (void *)(id+1));  // create reader thread
-    // pthread_create(&t3, NULL, checkNoC, (void *)(id+2));  // create reader thread
-    // pthread_create(&t4, NULL, checkNoC, (void *)(id+3));  // create reader thread
-    // pthread_create(&t6, NULL, sentBackToNoC, (void *)(id+1));  // create writer thread
-    // pthread_create(&t7, NULL, sentBackToNoC, (void *)(id+2));  // create writer thread
-    // pthread_create(&t8, NULL, sentBackToNoC, (void *)(id+3));  // create writer thread
     runCache_noxim();
     executeRemainTraffic();
     bool while_loop_flag = true;
@@ -230,10 +215,9 @@ void fedByNoxim(){
             (noc_finish[i]) ? noc_finish_counter++ : noc_finish_counter;
         if(noc_finish_counter == NIC_NUM)
             while_loop_flag = false;
-        // getchar();
     }
     cache_print_stats();
-    //* Cleanup
+    // Cleanup
     for(int i=0;i<cache->bank_size;i++){
       cacheset_cleanup(cache->cache_bank[i].cache_set);
       mshr_queue_cleanup(cache->cache_bank[i].mshr_queue);
@@ -277,19 +261,14 @@ void* checkNoC(void* arg){
         bool ready, valid, ack;
         //* Initialize packet
         Packet packet;
-        // printf("\n<<READER: %d>>\n", id);
-        // printf("SHM_NAME_NOC = %s\n", shm_name);
         //* Reading from shared memory object
-        // printf("(R%d) Wait for NoC to set valid signal.\n", id);
         while(CHECKVALID(ptr) != 1) {
             if(noxim_finish){
-                // printf("Noxim input finished!\n");
                 pthread_exit(NULL);
             }
             setIPC_Ready(ptr);
             usleep(10);
         }
-        // printf("(R%d) Request received!\n", id);
         pthread_mutex_lock(&mutex[id]);
         ready = CHECKREADY(ptr);
         valid = CHECKVALID(ptr);
@@ -318,17 +297,12 @@ void* checkNoC(void* arg){
                 packet.data[i][j] = GETDATA(ptr, i, j);
             }
         }
-        // if(!packet.req_type[0])
-        //     printf("(NIC%d) Receive tensor id %d\n", id, packet.tensor_id);
         setIPC_Ack(ptr);
-        // data_test = GETTEST(ptr, 15);
-        // printf("Current access number = %llu\n", accesses);
-        // printf("<<Reader %d Transaction completed!>>\n", id);
         transPacketToTraffic(packet, id);
         while(CHECKACK(ptr)!=0){
         }
         pthread_mutex_unlock(&mutex[id]);
-        //TODO: Check dependcy table
+        //* Check dependcy table
         for(int i=0;i<NIC_NUM;i++)
             pthread_mutex_lock(&mutex[i]);
         if(checkDependencyTable(tensor_id, packet_num, id)){
@@ -344,36 +318,29 @@ void* sentBackToNoC(void* arg){
     int* cache_nic_id = (int*)arg;
     int id = (*cache_nic_id);
     int nic_id = simple_log_2(PE_NUM)*(id+1) + id;
-    // printf("Cache NIC %d (ID %d on NoC)is ready to send back request.\n", id, nic_id);
     while(!noc_finish[id]){
         int front = trafficTableQueue[id]->front;
         if(trafficTableQueue[id]->trafficTable[front].dst_id == nic_id && trafficTableQueue[id]->trafficTable[front].finished){
-            // TODO: The traffic id should be verified if req is in same packet, since Cache Simulator may run in out of order.
+            //* Verify traffic id if req is in same packet, since CacheSim may run in out of order.
             pthread_mutex_lock(&mutex[id]);
             traffic_t traffic;
             dequeue(&traffic, trafficTableQueue[id]);
-            // printf("(Remove) size of trafficTable %d = %d\n", id, trafficTableQueue[id]->size);
-            // printf("front = %d, rear = %d\n", trafficTableQueue[id]->front, trafficTableQueue[id]->rear);
-            // printf("Remove traffic packet id %d from traffic table %d.\n", traffic.packet_id, id);
-            // printf("---------------\n");
             pthread_mutex_unlock(&mutex[id]);
             int validIndex = -1;
             pthread_mutex_lock(&mutex_sendBack);
             for(int i=0;i<SEND_BACK_PACKET_SIZE;i++){
                 if(validIndex == -1 && sendBackPacket[i].packet_id == -1){
-                    //* Setting valid index in case that there is no existed packet in sendBackPacket
+                    // Setting valid index in case that there is no existed packet in sendBackPacket
                     validIndex = i;
                 }
                 if(traffic.packet_id == sendBackPacket[i].packet_id){
-                    //* The packet is already existed in sendBackPacket
+                    // The packet is already existed in sendBackPacket
                     validIndex = i;
                     break;
                 }
             }
             if(!traffic.tail){
                 int index = traffic.sequence_no;
-                // if(index == 0)
-                //     printf("(NIC%d) req_type = %d index = %d, packet id = %d\n", id, traffic.req_type ,index, traffic.packet_id);
                 sendBackPacket[validIndex].packet_id = traffic.packet_id;
                 sendBackPacket[validIndex].req_type[index] = traffic.req_type;
                 sendBackPacket[validIndex].flit_word_num[index] = traffic.flit_word_num;
@@ -399,7 +366,6 @@ void* sentBackToNoC(void* arg){
                 assignPacket(&packet, sendBackPacket[validIndex]);
                 resetSendBackPacket(&sendBackPacket[validIndex]);
                 pthread_mutex_unlock(&mutex_sendBack);
-                // printf("\n<<Writer: %d>>\n", id);
                 const char* id_name;
                 switch(id){
                     case 0:
@@ -427,50 +393,41 @@ void* sentBackToNoC(void* arg){
                 uint32_t* ptr = (uint32_t*)mmap(NULL, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
                 uint32_t ready, valid, ack;
                 memset(ptr, 0, SHM_SIZE);
-                // printf("SHM_NAME_CACHE = %s\n", shm_name);
-                // printf("NIC %d Wait for NoC to set ready signal.\n", id);
                 while(CHECKREADY(ptr) != 1){
                 }
-                // printf("(NIC%d) Send back %d request to NoC. (req_type = %d)\n", id, sendback_count[id], packet.req_type[0]);
-                // printf("NoC is ready to read.\n");
-                //! set src_id (switch)
+                //* set src_id (switch)
                 setIPC_Data(ptr, packet.dst_id, 1, 0);
-                //! set dst_id (switch)
+                //* set dst_id (switch)
                 setIPC_Data(ptr, packet.src_id, 2, 0);
-                //* set packet_id
+                // set packet_id
                 setIPC_Data(ptr, packet.packet_id, 3, 0);
-                //* set packet_num
+                // set packet_num
                 setIPC_Data(ptr, packet.packet_num, 4, 0);
-                //* set tensor_id
+                // set tensor_id
                 setIPC_Data(ptr, packet.tensor_id, 5, 0);
-                //* set packet size
+                // set packet size
                 setIPC_Data(ptr, packet.packet_size, 6, 0);
                 for(int i=0;i<packet.packet_size;i++){
-                    //* set request addr
+                    // set request addr
                     setIPC_Addr(ptr, packet.addr[i], i);
-                    //* set request type
+                    // set request type
                     setIPC_Data(ptr, packet.req_type[i], 8, i);
-                    //* set flit_word_num
+                    // set flit_word_num
                     setIPC_Data(ptr, packet.flit_word_num[i], 9, i);
                     for(int j=0;j<packet.flit_word_num[i];j++){
-                        //* set request data
+                        // set request data
                         setIPC_Data(ptr, packet.data[i][j], 10+j, i);
                     }
                 }
                 setIPC_Valid(ptr);
                 sendback_count[id]++;
-                // if(!packet.req_type[0])
-                //     printf("(NIC%d) Write!! tensor id = %d\n", id, packet.tensor_id);
-                // printf("(NIC%d) Send back tensor id %d to PE %d(count =%d)\n", id, packet.tensor_id, packet.src_id, sendback_count[id]);
-                // printf("Wait for NoC to set ack signal.\n");
                 while(CHECKACK(ptr) != 1){
                 }
                 resetIPC_Valid(ptr);
                 resetIPC_Ack(ptr);
-                // printf("<<Writer %d Transaction completed!>>\n", id);
             }
-            //! Check if there is any request to be sent back when Cache Simulator finishs all its work
-            //! Otherwise, set finish signal for this Cache NIC IPC channel
+            //* Check if there is any request to be sent back when Cache Simulator finishs all its work
+            //* Otherwise, set finish signal for this Cache NIC IPC channel
             if(cache_finish){
                 if(isEmpty(trafficTableQueue[id])){
                     noc_finish[id] = true;
@@ -491,8 +448,6 @@ void runCache_noxim(){
         }
         if(stall_counter != traffic_queue_num){
             cycles++;
-            // printf("\n=========\n");
-            // printf("Cycle: %lld\n", cycles);
             int input_status;
             // * Load input to request queue
             for(int i =0;i<traffic_queue_num;i++){
@@ -500,61 +455,35 @@ void runCache_noxim(){
                 input_status = checkTrafficTable(trafficTableQueue[i], i);
                 pthread_mutex_unlock(&mutex[i]);
                 if(input_status == 0){
-                    // printf("Traffic Table %d is empty.\n", i);
+                    // Traffic Table i is empty
                 }
                 else if(input_status == 2){
+                    // Request Queue of Traffic Table i is full
                     stall_RequestQueue++;
-                    // printf("Request Queue of Traffic Table %d is full.\n", i);
                     break;
                 }
                 else if(input_status == 3){
-                    // printf("No request of Traffic Table %d can be processed now.\n", i);
+                    // No request of Traffic Table i can be processed now
                     break;
                 }
                 else{
-                    // printf("No traffic from Traffic Table %d can be processed now.\n", i);
-                    // printf("Traffic Table %d size = %d\n", i, trafficTableQueue[i]->size);
-                    // printf("Traffic Table %d front = %d\n", i, trafficTableQueue[i]->front);
-                    // printf("Traffic finished? %d\n", trafficTableQueue[i]->trafficTable[trafficTableQueue[i]->front].finished);
-                    // printf("\n");
-                    // trafficTableStatus();
-                    // printf("Request of Traffic Table %d is sent\n", i);
+                    // No traffic from Traffic Table i can be processed now
                 }
-                // printf("---------\n");
             }
             // * Check the MSHR & MAF status for each bank
             for(int j=0;j<cache->bank_size;j++){
-                // ! Only need to check MSHR status when MSHR enabled
+                // Only need to check MSHR status when MSHR enabled
                 if(cache->cache_bank[j].mshr_queue->enable_mshr){
-                    // printf("Checking MSHR %d status...\n", j);
                     // Update the status of MSHR queue of each bank
                     mshr_queue_check_isssue(cache->cache_bank[j].mshr_queue);
                     mshr_queue_counter_add(cache->cache_bank[j].mshr_queue);
                     mshr_queue_check_data_returned(cache->cache_bank[j].mshr_queue);
                     // Check if data in each MSHR entries is returned
-                    // printf("Status of Bank %d:\n", j);
-                    // printf("Bank %d is stalled? %s\n", j, cache->cache_bank[j].stall ? "T" : "F");
-                    // printf("Stall type: %d\n", cache->cache_bank[j].stall_type);
                     for(int i=0; i<cache->cache_bank[j].mshr_queue->entries;i++){
-                        // printf("MSHR entry %d: Valid(%s), Issued(%s), Returned(%s)\n", i, cache->cache_bank[j].mshr_queue->mshr[i].valid ? "T" : "F", cache->cache_bank[j].mshr_queue->mshr[i].issued ? "T" : "F", cache->cache_bank[j].mshr_queue->mshr[i].data_returned ? "T" : "F");
                         if(cache->cache_bank[j].mshr_queue->mshr[i].data_returned && cache->cache_bank[j].mshr_queue->mshr[i].valid){
-                            // printf("Bank %d MSHR Queue %d addr %016llx returned. (Tag is %x)\n", j, i, cache->cache_bank[j].mshr_queue->mshr[i].addr, cache->cache_bank[j].mshr_queue->mshr[i].tag);
                             // ! Check if the return addr is satlling the cache bank
                             if(cache->cache_bank[j].stall){
                                 if(cache->cache_bank[j].stall_type){
-                                    // printf("Bank %d is stalled by tag %x\n", j, cache->cache_bank[j].stall_tag);
-                                    // for(int i =0;i<cache->cache_bank[j].mshr_queue->entries;i++){
-                                    //     printf("MSHR %d tag = %x\n", i, cache->cache_bank[j].mshr_queue->mshr[i].tag);
-                                    //     printf("MSHR %d valid = %s\n", i, cache->cache_bank[j].mshr_queue->mshr[i].valid ? "T" : "F");
-                                    //     printf("MSHR %d issued = %s\n", i, cache->cache_bank[j].mshr_queue->mshr[i].issued ? "T" : "F");
-                                    //     printf("MSHR %d data_returned = %s\n", i, cache->cache_bank[j].mshr_queue->mshr[i].data_returned ? "T" : "F");
-                                    //     printf("----------------\n");
-                                    // }
-                                    // getchar();
-                                    // pthread_mutex_unlock(&mutex[0]);
-                                    // pthread_mutex_unlock(&mutex[1]);
-                                    // pthread_mutex_unlock(&mutex[2]);
-                                    // pthread_mutex_unlock(&mutex[3]);
                                     if(cache->cache_bank[j].stall_tag == cache->cache_bank[j].mshr_queue->mshr[i].tag){
                                         cache->cache_bank[j].stall = false;
                                         cache->cache_bank[j].stall_type = 0;
@@ -564,28 +493,21 @@ void runCache_noxim(){
                                     }
                                 }
                                 else{
-                                    // printf("Bank %d is stalled by any addr.\n", j);
                                     cache->cache_bank[j].stall = false;
                                 }
                             }
-                            // printf("Request addr %llx returned from MSHR queue %d\n", cache->cache_bank[j].mshr_queue->mshr[i].addr, i);
                             // Load returned data to cache set
                             cacheset_load_MSHR_data(cache->cache_bank[j].set_num, j, cache, cache->cache_bank[j].cache_set, cache->cache_bank[j].mshr_queue->mshr[i].addr, mshr_queue_clear_inst(cache->cache_bank[j].mshr_queue,i), &writebacks, &non_dirty_replaced, addr_mode, cache->cache_bank[j].mshr_queue->mshr[i].maf[0].req_number_on_trace);
                         }
                     }
-                    // printf("--------\n");
                 }
                 // * When request queue is not empty, send request to cache bank
                 if(!req_queue_empty(cache->cache_bank[j].request_queue)){
-                    // printf("Sending request to bank %d\n", j);
-                    // printf("Remaining request in bank %d = %d\n", j, cache->cache_bank[j].request_queue->req_num);
                     req_send_to_set(cache, cache->cache_bank[j].request_queue, cache->cache_bank, j);
                 }
                 else{
-                    // printf("Request queue of bank %d is empty.\n", j);
+                    // Request queue of bank %d is empty
                 }
-                // printf("--------\n");
-                // * Deal with unresolved MAF
             }
         }  
         trafficTable_finish = true;
@@ -610,11 +532,11 @@ void runCache_noxim(){
 }
 
 void executeRemainTraffic(){
-    // ! Execution not done yet => request queue need to be cleared
+    //! Execution not done yet => request queue need to be cleared
     printf("Clearing Request Queue & MSHR Queue...\n");
     printf("Cycle: %lld\n", cycles);
     printf("=====================\n");
-    //* Print the state of queue in each bank
+    // Print the state of queue in each bank
     for(int j = 0;j<cache->bank_size;j++){
         printf("-------------\n");
         printf("Bank %d:\n",j);
@@ -634,7 +556,7 @@ void executeRemainTraffic(){
         }
     }
     printf("---------------------\n");
-    // * MSHR enabled => need to check if MSHR is cleared(stalled) & request queue is cleared
+    // MSHR enabled => need to check if MSHR is cleared(stalled) & request queue is cleared
     if(cache->cache_bank[0].mshr_queue->enable_mshr){
       bool MSHR_not_clear = false;
       bool req_queue_not_clear = false;
@@ -727,17 +649,12 @@ void executeRemainTraffic(){
       while(req_queue_not_clear || check_stall){
         check_stall = false;
         req_queue_not_clear = false;
-        // printf("non-MSHR design is not cleared yet, wait for bank and request queue to be done.\n");
         cycles++;
         for(int j = 0;j<cache->bank_size;j++){
           if(!req_queue_empty(cache->cache_bank[j].request_queue)){
-            // printf("Bank %d request still got %d requests.\n",j ,cache->cache_bank[j].request_queue->req_num);
-            // if(cache->cache_bank[j].stall)
-            //   printf("Bank %d is also stalled.\n", j);
             req_send_to_set(cache, cache->cache_bank[j].request_queue, cache->cache_bank, j);
           }
           else if(cache->cache_bank[j].stall){
-            // printf("Bank %d is now stalled.\n", j);
             req_send_to_set(cache, cache->cache_bank[j].request_queue, cache->cache_bank, j);
           }
         }
@@ -778,7 +695,6 @@ bool checkDependencyTable(int tensor_id, int packet_num, int nic_id){
                     return false;
                 }
                 else{
-                    // printf("(NIC%d) Tensor id %d packet count = %d\n", nic_id, tensor_id, tensorDependencyTable[i][nic_id].packet_count);
                     tensorDependencyTable[i][nic_id].packet_count = tensorDependencyTable[i][nic_id].packet_count - 1;
                     if(tensorDependencyTable[i][nic_id].packet_count == 0){
                         tensorDependencyTable[i][nic_id].return_flag = true;
@@ -850,13 +766,8 @@ void transPacketToTraffic(Packet packet, int id){
             loop = false;
             traffic.tail = true;
         }
-        // if(traffic.tail)
-        //     printf("tensor id %d is transfer to packet, is tail\n", packet.tensor_id);
         enqueue(trafficTableQueue[id], traffic);
     }
-    // printf("unsent_req = %d\n", trafficTableQueue[id]->unsent_req);
-    // printf("front = %d, rear = %d\n", trafficTableQueue[id]->front, trafficTableQueue[id]->rear);
-    // printf("Transfer packet to traffic table %d completed!\n", id);
 }
 
 void setIPC_Data(uint32_t *ptr, int data, int const_pos, int index){
@@ -919,7 +830,6 @@ void assignPacket(Packet* p, Packet assign_packet){
             p->data[i][j] = assign_packet.data[i][j];
         }
     }
-    // printf("--------\n");
 }
 
 void resetSendBackPacket(Packet* packet){
