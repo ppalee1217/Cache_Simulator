@@ -1,2 +1,5 @@
-/Cache_Simulator/Traces
+build/
 *.txt
+*.exe
+*.out
+cachesim
